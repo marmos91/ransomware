@@ -9,7 +9,7 @@ This software is made just for demonstration purposes. If you want to run it loc
 To setup the tool just run 
 
 ```bash
-$ go install github.com/marmos91/ransomware
+$ go install github.com/marmos91/ransomware@latest
 ```
 
 ## Why 
