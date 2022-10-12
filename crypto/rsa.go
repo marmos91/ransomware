@@ -10,6 +10,8 @@ import (
 	"errors"
 )
 
+const RSA_KEY_SIZE = 2048
+
 type Keypair struct {
 	Public  *rsa.PublicKey
 	Private *rsa.PrivateKey

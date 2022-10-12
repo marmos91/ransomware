@@ -7,7 +7,7 @@ import (
 	"github.com/marmos91/ransomware/utils"
 )
 
-func WalkFilesWithExtFilter(path string, extensions []string, skipHidden bool, callback func(path string, info fs.FileInfo) error) error {
+func WalkFilesWithExtFilter(path string, extBlacklist []string, extWhitelist []string, skipHidden bool, callback func(path string, info fs.FileInfo) error) error {
 	return filepath.Walk(path, func(currentPath string, currentInfo fs.FileInfo, currentErr error) error {
 		if currentErr != nil {
 			return currentErr
@@ -17,10 +17,24 @@ func WalkFilesWithExtFilter(path string, extensions []string, skipHidden bool, c
 			return currentErr
 		}
 
-		if !currentInfo.IsDir() && !utils.SliceContains(extensions, filepath.Ext(currentPath)) {
+		if currentInfo.IsDir() {
+			return nil
+		}
+
+		if len(extWhitelist) > 0 && whitelisted(currentPath, extWhitelist) {
+			currentErr = callback(currentPath, currentInfo)
+		} else if len(extBlacklist) > 0 && notBlacklisted(currentPath, extBlacklist) {
 			currentErr = callback(currentPath, currentInfo)
 		}
 
 		return currentErr
 	})
+}
+
+func whitelisted(path string, whitelist []string) bool {
+	return utils.SliceContains(whitelist, filepath.Ext(path))
+}
+
+func notBlacklisted(path string, blacklist []string) bool {
+	return !utils.SliceContains(blacklist, filepath.Ext(path))
 }

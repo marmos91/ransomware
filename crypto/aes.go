@@ -9,7 +9,9 @@ import (
 
 type AesKey []byte
 
-// Test
+const AES_KEY_SIZE = 32
+
+// Encrypts a buffer with AES
 func AesEncrypt(plainText []byte, key AesKey) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 
@@ -34,6 +36,7 @@ func AesEncrypt(plainText []byte, key AesKey) ([]byte, error) {
 	return cypherText, nil
 }
 
+// Decrypts a buffer with AES
 func AesDecrypt(cypherText []byte, key AesKey) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 
@@ -56,6 +59,7 @@ func AesDecrypt(cypherText []byte, key AesKey) ([]byte, error) {
 	return plainText, nil
 }
 
+// Creates a new random AES key
 func NewRandomAesKey(keySize int) (AesKey, error) {
 	key := make([]byte, keySize)
 

