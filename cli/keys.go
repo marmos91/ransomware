@@ -1,18 +1,18 @@
-package ransomcli
+package cli
 
 import (
 	"log"
 	"path/filepath"
 
 	"github.com/marmos91/ransomware/crypto"
-	"github.com/marmos91/ransomware/ransomfs"
-	"github.com/urfave/cli/v2"
+	"github.com/marmos91/ransomware/fs"
+	urfavecli "github.com/urfave/cli/v2"
 )
 
 const PUBLIC_KEY_NAME = "pub.pem"
 const PRIVATE_KEY_NAME = "priv.pem"
 
-func CreateKeys(ctx *cli.Context) error {
+func CreateKeys(ctx *urfavecli.Context) error {
 	path := ctx.String("path")
 
 	rsaKeypair, err := crypto.NewRandomRsaKeypair(crypto.RSA_KEY_SIZE)
@@ -37,8 +37,8 @@ func CreateKeys(ctx *cli.Context) error {
 		return err
 	}
 
-	ransomfs.WriteStringToFile(filepath.Join(path, PRIVATE_KEY_NAME), privatePemContent)
-	ransomfs.WriteStringToFile(filepath.Join(path, PUBLIC_KEY_NAME), publicPemContent)
+	fs.WriteStringToFile(filepath.Join(path, PRIVATE_KEY_NAME), privatePemContent)
+	fs.WriteStringToFile(filepath.Join(path, PUBLIC_KEY_NAME), publicPemContent)
 
 	return nil
 }

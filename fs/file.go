@@ -1,4 +1,4 @@
-package ransomfs
+package fs
 
 import (
 	"os"

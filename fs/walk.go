@@ -1,14 +1,14 @@
-package ransomfs
+package fs
 
 import (
-	"io/fs"
+	iofs "io/fs"
 	"path/filepath"
 
 	"github.com/marmos91/ransomware/utils"
 )
 
-func WalkFilesWithExtFilter(path string, extBlacklist []string, extWhitelist []string, skipHidden bool, callback func(path string, info fs.FileInfo) error) error {
-	return filepath.Walk(path, func(currentPath string, currentInfo fs.FileInfo, currentErr error) error {
+func WalkFilesWithExtFilter(path string, extBlacklist []string, extWhitelist []string, skipHidden bool, callback func(path string, info iofs.FileInfo) error) error {
+	return filepath.Walk(path, func(currentPath string, currentInfo iofs.FileInfo, currentErr error) error {
 		if currentErr != nil {
 			return currentErr
 		}

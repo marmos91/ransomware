@@ -1,7 +1,7 @@
 //go:build windows
 // +build windows
 
-package ransomfs
+package fs
 
 import (
 	"path/filepath"
