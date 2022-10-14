@@ -24,23 +24,9 @@ func ReadStringFileContent(path string) (string, error) {
 }
 
 func DeleteFileIfExists(path string) error {
-	if Exists(path) {
-		return os.Remove(path)
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		return nil
 	}
 
-	return nil
-}
-
-func Exists(path string) bool {
-	_, err := os.Stat(path)
-
-	if err == nil {
-		return true
-	}
-
-	if errors.Is(err, os.ErrNotExist) {
-		return false
-	}
-
-	return false
+	return os.Remove(path)
 }

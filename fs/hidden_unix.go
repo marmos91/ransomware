@@ -3,8 +3,12 @@
 
 package fs
 
+import (
+	"path/filepath"
+)
+
 const dotCharacter = 46
 
 func IsHidden(path string) bool {
-	return path[0] == dotCharacter
+	return filepath.Base(path)[0] == dotCharacter
 }

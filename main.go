@@ -17,7 +17,7 @@ const APP_VERSION = "v1.0.0"
 
 func Init() func(*urfavecli.Context) error {
 	return func(ctx *urfavecli.Context) error {
-		if ctx.Bool("silent") {
+		if !ctx.Bool("verbose") {
 			utils.DisableLogs()
 		} else {
 			figure.NewFigure(APP_NAME, "graffiti", true).Print()
@@ -41,7 +41,7 @@ func main() {
 		},
 		Flags: []urfavecli.Flag{
 			&urfavecli.BoolFlag{
-				Name:  "silent",
+				Name:  "verbose",
 				Usage: "Runs the tool in silent mode (no logs)",
 				Value: false,
 			},
@@ -151,6 +151,11 @@ func main() {
 					&urfavecli.BoolFlag{
 						Name:  "dryRun",
 						Usage: "decrypts files without deleting encrypted versions",
+						Value: false,
+					},
+					&urfavecli.BoolFlag{
+						Name:  "skipHidden",
+						Usage: "skips hidden folders",
 						Value: false,
 					},
 					&urfavecli.StringFlag{

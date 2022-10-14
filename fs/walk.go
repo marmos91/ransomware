@@ -2,6 +2,7 @@ package fs
 
 import (
 	iofs "io/fs"
+	"log"
 	"path/filepath"
 
 	"github.com/marmos91/ransomware/utils"
@@ -14,6 +15,7 @@ func WalkFilesWithExtFilter(path string, extBlacklist []string, extWhitelist []s
 		}
 
 		if skipHidden && IsHidden(currentPath) {
+			log.Println("PATH", currentPath, "is hidden")
 			return currentErr
 		}
 
@@ -21,6 +23,10 @@ func WalkFilesWithExtFilter(path string, extBlacklist []string, extWhitelist []s
 			currentErr = callback(currentPath, currentInfo)
 		} else if len(extBlacklist) > 0 && notBlacklisted(currentPath, extBlacklist) {
 			currentErr = callback(currentPath, currentInfo)
+		} else {
+			if currentInfo.IsDir() {
+				currentErr = callback(currentPath, currentInfo)
+			}
 		}
 
 		return currentErr

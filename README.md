@@ -1,11 +1,10 @@
-# ransomware
-A simple demonstration tool to simulate a ransomware attack
+# ransomware-example
+A simple demonstration tool to simulate a ransomware attack locally
 
 ## ⚠️ Disclaimer ⚠️
-This software is made just for demonstration purposes. If you want to run it locally for tests, take care of what directories you decide to encrypt. The software is distributed in MIT license. Its use is free, however the author doesn't take responsibility for any illegal use of the code by 3rd parties.
+This software is made just for demonstration and study purposes. If you want to run it locally for tests, take care of what directories you decide to encrypt. The software is distributed in MIT license. Its use is free, however the author doesn't take responsibility for any illegal use of the code by 3rd parties.
 
 ## Setup
-
 To setup the tool just run 
 
 ```bash
@@ -43,7 +42,7 @@ COMMANDS:
    help, h         Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
-   --silent       Runs the tool in silent mode (no logs) (default: false)
+   --verbose       Runs the tool in verbose mode (more logs) (default: false)
    --help, -h     show help (default: false)
    --version, -v  print the version (default: false)
 ```
