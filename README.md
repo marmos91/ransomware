@@ -42,7 +42,7 @@ COMMANDS:
    help, h         Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
-   --verbose       Runs the tool in verbose mode (more logs) (default: false)
+   --verbose      Runs the tool in verbose mode (more logs) (default: false)
    --help, -h     show help (default: false)
    --version, -v  print the version (default: false)
 ```
