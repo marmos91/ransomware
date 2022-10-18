@@ -143,6 +143,8 @@ func Encrypt(ctx *urfavecli.Context) error {
 	if addRansom {
 		ransomPath := filepath.Join(absolutePath, ransomFileName)
 
+		log.Printf("Adding ransom file at %s", ransomPath)
+
 		if _, err := os.Stat(ransomPath); errors.Is(err, os.ErrNotExist) {
 			// Ransom file does not exist
 
@@ -189,6 +191,8 @@ func Encrypt(ctx *urfavecli.Context) error {
 			}
 
 			writer.Flush()
+		} else {
+			log.Printf("Ransom file already exists at %s. Skipping generation", ransomPath)
 		}
 	}
 
