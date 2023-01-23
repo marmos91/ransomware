@@ -11,6 +11,14 @@ To setup the tool just run
 $ go install github.com/marmos91/ransomware@latest
 ```
 
+### Setup locally
+
+To run the tool locally without installing it
+
+```bash
+go run main.go
+```
+
 ## Why 
 In order to demonstrate the way ransomware works quickly and in a protected environment, **it is very useful to be able to restrict its operation within a directory**. This way the process takes much less time (the entire operating system does not need to be encrypted). Writing this tool in Go, also **allows the tool to be developed even in a non-Windows environment** (by far the most supported operating system by ransomware available online)
 
