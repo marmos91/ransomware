@@ -13,7 +13,13 @@ func WalkFilesWithExtFilter(path string, extBlacklist []string, extWhitelist []s
 			return currentErr
 		}
 
-		if skipHidden && IsHidden(currentPath) {
+		isHidden, err := IsHidden(currentPath)
+
+		if err != nil {
+			return currentErr
+		}
+
+		if skipHidden && isHidden {
 			return currentErr
 		}
 
