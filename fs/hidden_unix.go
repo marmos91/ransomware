@@ -9,6 +9,6 @@ import (
 
 const dotCharacter = 46
 
-func IsHidden(path string) bool {
-	return filepath.Base(path)[0] == dotCharacter
+func IsHidden(path string) (bool, error) {
+	return filepath.Base(path)[0] == dotCharacter, nil
 }
