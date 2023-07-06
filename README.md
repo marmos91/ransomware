@@ -32,9 +32,14 @@ Writing this tool in Go, also **allows the tool to be developed even in a non-Wi
 
 ## Demo
 
-This project was used to showcase the resilience of [Cubbit](https://www.cubbit.io)'s object storage to this type of attack, demonstrating how it is possible to defend against such a tool using Cubbit's features ([versioning](https://docs.cubbit.io/guides/bucket-and-object-versioning), [object locking](https://docs.cubbit.io/guides/object-lock)).
-The whole thing is available in a video demo that can be found [here](https://www.youtube.com/watch?v=w4vfng17eYg)
-The restore tool used in the demo is available [here](https://github.com/marmos91/s3restore)
+This project was used to showcase the resilience of [Cubbit](https://www.cubbit.io)'s object storage to this type of attack, demonstrating how it is possible to defend against such a tool using.
+Cubbit's features ([versioning](https://docs.cubbit.io/guides/bucket-and-object-versioning), [object locking](https://docs.cubbit.io/guides/object-lock)).
+
+The whole thing is available in a video demo that can be found [here](https://www.youtube.com/watch?v=w4vfng17eYg).
+
+[![Watch the video](https://markdown-videos.vercel.app/youtube/w4vfng17eYg)](https://youtu.be/w4vfng17eYg)
+
+The restore tool used in the demo is available [here](https://github.com/marmos91/s3restore).
 
 ## How to use it
 
