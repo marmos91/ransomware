@@ -37,8 +37,9 @@ func CreateKeys(ctx *urfavecli.Context) error {
 		return err
 	}
 
-	fs.WriteStringToFile(filepath.Join(path, PRIVATE_KEY_NAME), privatePemContent)
-	fs.WriteStringToFile(filepath.Join(path, PUBLIC_KEY_NAME), publicPemContent)
+	if err := fs.WriteStringToFile(filepath.Join(path, PRIVATE_KEY_NAME), privatePemContent); err != nil {
+		return err
+	}
 
-	return nil
+	return fs.WriteStringToFile(filepath.Join(path, PUBLIC_KEY_NAME), publicPemContent)
 }
