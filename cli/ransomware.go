@@ -209,7 +209,7 @@ func Decrypt(ctx *urfavecli.Context) error {
 	privateKeyPath := ctx.String("privateKey")
 
 	if privateKeyPath == "" {
-		return errors.New("publicKey argument is required")
+		return errors.New("privateKey argument is required")
 	}
 
 	rsaPrivateKey, err := LoadPrivateKey(privateKeyPath)
