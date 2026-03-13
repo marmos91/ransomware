@@ -3,36 +3,32 @@ package fs
 import (
 	iofs "io/fs"
 	"path/filepath"
-	"strings"
 
 	"github.com/marmos91/ransomware/utils"
 )
 
-func WalkFilesWithExtFilter(path string, extBlacklist []string, extWhitelist []string, skipHidden bool, callback func(path string, info iofs.FileInfo) error) error {
-	return filepath.Walk(path, func(currentPath string, currentInfo iofs.FileInfo, err error) error {
+// walkFiles walks the directory tree rooted at path, skipping hidden entries
+// and filtering by extension, then calls visit for each matching file.
+func walkFiles(path string, extBlacklist, extWhitelist []string, skipHidden bool, visit func(string, iofs.FileInfo) error) error {
+	return filepath.Walk(path, func(currentPath string, info iofs.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 
 		if skipHidden {
-			isHidden, err := IsHidden(currentPath)
+			hidden, err := IsHidden(currentPath)
 			if err != nil {
 				return err
 			}
-
-			if isHidden {
-				if currentInfo.IsDir() {
+			if hidden {
+				if info.IsDir() {
 					return filepath.SkipDir
 				}
 				return nil
 			}
 		}
 
-		if currentInfo.IsDir() {
-			return nil
-		}
-
-		if currentInfo.IsDir() {
+		if info.IsDir() {
 			return nil
 		}
 
@@ -40,29 +36,33 @@ func WalkFilesWithExtFilter(path string, extBlacklist []string, extWhitelist []s
 			return nil
 		}
 
-		return callback(currentPath, currentInfo)
+		return visit(currentPath, info)
 	})
 }
 
-func shouldProcess(path string, whitelist []string, blacklist []string) bool {
+// WalkAndCollect returns all file paths under the given directory that pass
+// the extension whitelist/blacklist filters and optional hidden-file check.
+func WalkAndCollect(path string, extBlacklist, extWhitelist []string, skipHidden bool) ([]string, error) {
+	var files []string
+
+	err := walkFiles(path, extBlacklist, extWhitelist, skipHidden, func(filePath string, _ iofs.FileInfo) error {
+		files = append(files, filePath)
+		return nil
+	})
+
+	return files, err
+}
+
+func shouldProcess(path string, whitelist, blacklist []string) bool {
 	ext := filepath.Ext(path)
 
-	if hasNonEmptyEntry(whitelist) {
+	if len(whitelist) > 0 {
 		return utils.SliceContains(whitelist, ext)
 	}
 
-	if hasNonEmptyEntry(blacklist) {
+	if len(blacklist) > 0 {
 		return !utils.SliceContains(blacklist, ext)
 	}
 
 	return true
-}
-
-func hasNonEmptyEntry(list []string) bool {
-	for _, s := range list {
-		if strings.TrimSpace(s) != "" {
-			return true
-		}
-	}
-	return false
 }
