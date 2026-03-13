@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bufio"
-	"bytes"
 	"crypto/rsa"
 	"encoding/base64"
 	"errors"
@@ -294,29 +293,24 @@ func decryptFile(path string, rsaPrivateKey *rsa.PrivateKey, encSuffix string) e
 	log.Printf("Decrypting %s", path)
 
 	cipherText, err := os.ReadFile(path)
-
-	newFilePath := strings.Replace(path, encSuffix, "", 1)
-
 	if err != nil {
 		return err
 	}
 
 	keySize := rsaPrivateKey.Size()
-	encryptedAesKey := make([]byte, keySize)
+	if len(cipherText) <= keySize {
+		return fmt.Errorf("file too small to be a valid encrypted file: %s", path)
+	}
 
-	_, err = bytes.NewReader(cipherText).ReadAt(encryptedAesKey, 0)
+	newFilePath := strings.TrimSuffix(path, encSuffix)
+
+	aesKey, err := crypto.RsaDecrypt(cipherText[:keySize], rsaPrivateKey)
 
 	if err != nil {
 		return err
 	}
 
-	aesKey, err := crypto.RsaDecrypt(encryptedAesKey, rsaPrivateKey)
-
-	if err != nil {
-		return err
-	}
-
-	plaintext, err := crypto.AesDecrypt(cipherText[len(encryptedAesKey):], aesKey)
+	plaintext, err := crypto.AesDecrypt(cipherText[keySize:], aesKey)
 
 	if err != nil {
 		return err
