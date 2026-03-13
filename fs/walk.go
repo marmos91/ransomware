@@ -19,6 +19,13 @@ func WalkFilesWithExtFilter(path string, extBlacklist []string, extWhitelist []s
 		}
 
 		if skipHidden && isHidden {
+			if currentInfo.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		if currentInfo.IsDir() {
 			return nil
 		}
 
@@ -37,13 +44,22 @@ func WalkFilesWithExtFilter(path string, extBlacklist []string, extWhitelist []s
 func shouldProcess(path string, whitelist []string, blacklist []string) bool {
 	ext := filepath.Ext(path)
 
-	if len(whitelist) > 0 {
+	if hasNonEmptyEntry(whitelist) {
 		return utils.SliceContains(whitelist, ext)
 	}
 
-	if len(blacklist) > 0 {
+	if hasNonEmptyEntry(blacklist) {
 		return !utils.SliceContains(blacklist, ext)
 	}
 
 	return true
+}
+
+func hasNonEmptyEntry(list []string) bool {
+	for _, s := range list {
+		if s != "" {
+			return true
+		}
+	}
+	return false
 }
