@@ -287,7 +287,7 @@ func encryptFile(path string, aesKey crypto.AesKey, encryptedAesKey []byte, encS
 
 	fileContent := append(encryptedAesKey, cipherText...)
 
-	return fs.WriteStringToFile(newFilePath, string(fileContent))
+	return fs.WriteToFile(newFilePath, fileContent)
 }
 
 func decryptFile(path string, rsaPrivateKey *rsa.PrivateKey, encSuffix string) error {
