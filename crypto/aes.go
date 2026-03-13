@@ -4,6 +4,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"fmt"
 	"io"
 )
 
@@ -48,6 +49,10 @@ func AesDecrypt(cypherText []byte, key AesKey) ([]byte, error) {
 
 	if err != nil {
 		return nil, err
+	}
+
+	if len(cypherText) < gcm.NonceSize() {
+		return nil, fmt.Errorf("ciphertext too short: %d bytes, need at least %d", len(cypherText), gcm.NonceSize())
 	}
 
 	plainText, err := gcm.Open(nil, cypherText[:gcm.NonceSize()], cypherText[gcm.NonceSize():], nil)
