@@ -1,5 +1,4 @@
 //go:build windows
-// +build windows
 
 package fs
 
@@ -8,11 +7,12 @@ import (
 	"syscall"
 )
 
-const dotCharacter = 46
-
 func IsHidden(path string) (bool, error) {
-	// dotfiles also count as hidden (if you want)
-	if path[0] == dotCharacter {
+	base := filepath.Base(path)
+	if base == "." || base == ".." {
+		return false, nil
+	}
+	if base[0] == '.' {
 		return true, nil
 	}
 
@@ -21,10 +21,8 @@ func IsHidden(path string) (bool, error) {
 		return false, err
 	}
 
-	// Appending `\\?\` to the absolute path helps with
-	// preventing 'Path Not Specified Error' when accessing
-	// long paths and filenames
-	// https://docs.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation?tabs=cmd
+	// Prefix with `\\?\` to support long paths on Windows.
+	// See: https://docs.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation
 	pointer, err := syscall.UTF16PtrFromString(`\\?\` + absPath)
 	if err != nil {
 		return false, err
