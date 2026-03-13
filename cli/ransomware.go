@@ -99,8 +99,8 @@ func Encrypt(ctx *urfavecli.Context) error {
 
 	skipHidden := ctx.Bool("skipHidden")
 	dryRun := ctx.Bool("dryRun")
-	extBlacklist := strings.Split(ctx.String("extBlacklist"), ",")
-	extWhitelist := strings.Split(ctx.String("extWhitelist"), ",")
+	extBlacklist := splitCommaSeparated(ctx.String("extBlacklist"))
+	extWhitelist := splitCommaSeparated(ctx.String("extWhitelist"))
 	encSuffix := ctx.String("encSuffix")
 
 	absolutePath, err := filepath.Abs(path)
@@ -319,4 +319,15 @@ func decryptFile(path string, rsaPrivateKey *rsa.PrivateKey, encSuffix string) e
 	}
 
 	return fs.WriteToFile(newFilePath, plaintext)
+}
+
+// splitCommaSeparated splits a comma-separated string into a slice.
+// Returns nil for empty input, avoiding the strings.Split("", ",") pitfall
+// which would return []string{""}.
+func splitCommaSeparated(s string) []string {
+	if s == "" {
+		return nil
+	}
+
+	return strings.Split(s, ",")
 }
