@@ -2,6 +2,7 @@ package cli
 
 import (
 	"log"
+	"os"
 	"path/filepath"
 
 	"github.com/marmos91/ransomware/crypto"
@@ -37,9 +38,16 @@ func CreateKeys(ctx *urfavecli.Context) error {
 		return err
 	}
 
-	if err := fs.WriteStringToFile(filepath.Join(path, PRIVATE_KEY_NAME), privatePemContent); err != nil {
+	privKeyPath := filepath.Join(absolutePath, PRIVATE_KEY_NAME)
+	if err := fs.WriteToFileWithMode(privKeyPath, []byte(privatePemContent), 0600); err != nil {
 		return err
 	}
 
-	return fs.WriteStringToFile(filepath.Join(path, PUBLIC_KEY_NAME), publicPemContent)
+	pubKeyPath := filepath.Join(absolutePath, PUBLIC_KEY_NAME)
+	if err := fs.WriteStringToFile(pubKeyPath, publicPemContent); err != nil {
+		os.Remove(privKeyPath)
+		return err
+	}
+
+	return nil
 }
