@@ -320,12 +320,25 @@ func decryptFile(path string, rsaPrivateKey *rsa.PrivateKey, encSuffix string) e
 }
 
 // splitCommaSeparated splits a comma-separated string into a slice.
-// Returns nil for empty input, avoiding the strings.Split("", ",") pitfall
-// which would return []string{""}.
+// Returns nil for empty or whitespace-only input. Trims whitespace from
+// each token and drops empty entries to handle inputs like ".txt, .doc"
+// or trailing commas like ".txt,".
 func splitCommaSeparated(s string) []string {
+	s = strings.TrimSpace(s)
 	if s == "" {
 		return nil
 	}
 
-	return strings.Split(s, ",")
+	parts := strings.Split(s, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
 }
