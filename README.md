@@ -166,7 +166,7 @@ This is an example of ransom file. The templated strings `{{.BitcoinAddress}}`, 
 ```txt
 !!! IMPORTANT !!!
 
-All of your files are encrypted with RSA 4096 and AES 256 ciphers.
+All of your files are encrypted with RSA 2048 and AES 256 ciphers.
 More information about RSA and AES can be found here:
 - https://en.wikipedia.org/wiki/RSA_(cryptosystem)
 - https://en.wikipedia.org/wiki/Advanced_Encryption_Standard
