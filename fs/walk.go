@@ -31,10 +31,8 @@ func WalkFilesWithExtFilter(path string, extBlacklist []string, extWhitelist []s
 			currentErr = callback(currentPath, currentInfo)
 		} else if len(extBlacklist) > 0 && notBlacklisted(currentPath, extBlacklist) {
 			currentErr = callback(currentPath, currentInfo)
-		} else {
-			if currentInfo.IsDir() {
-				currentErr = callback(currentPath, currentInfo)
-			}
+		} else if len(extWhitelist) == 0 && len(extBlacklist) == 0 {
+			currentErr = callback(currentPath, currentInfo)
 		}
 
 		return currentErr
