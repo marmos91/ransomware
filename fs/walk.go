@@ -9,7 +9,7 @@ import (
 
 // walkFiles walks the directory tree rooted at path, skipping hidden entries
 // and filtering by extension, then calls visit for each matching file.
-func walkFiles(path string, extBlacklist, extWhitelist []string, skipHidden bool, visit func(string, iofs.FileInfo) error) error {
+func walkFiles(path string, extBlacklist, extWhitelist []string, skipHidden bool, recursive bool, visit func(string, iofs.FileInfo) error) error {
 	return filepath.Walk(path, func(currentPath string, info iofs.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -29,6 +29,9 @@ func walkFiles(path string, extBlacklist, extWhitelist []string, skipHidden bool
 		}
 
 		if info.IsDir() {
+			if !recursive && currentPath != path {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 
@@ -42,10 +45,10 @@ func walkFiles(path string, extBlacklist, extWhitelist []string, skipHidden bool
 
 // WalkAndCollect returns all file paths under the given directory that pass
 // the extension whitelist/blacklist filters and optional hidden-file check.
-func WalkAndCollect(path string, extBlacklist, extWhitelist []string, skipHidden bool) ([]string, error) {
+func WalkAndCollect(path string, extBlacklist, extWhitelist []string, skipHidden bool, recursive bool) ([]string, error) {
 	var files []string
 
-	err := walkFiles(path, extBlacklist, extWhitelist, skipHidden, func(filePath string, _ iofs.FileInfo) error {
+	err := walkFiles(path, extBlacklist, extWhitelist, skipHidden, recursive, func(filePath string, _ iofs.FileInfo) error {
 		files = append(files, filePath)
 		return nil
 	})

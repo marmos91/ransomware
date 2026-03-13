@@ -94,6 +94,12 @@ func main() {
 						Value: false,
 					},
 					&urfavecli.BoolFlag{
+						Name:    "recursive",
+						Aliases: []string{"r"},
+						Usage:   "process directories recursively",
+						Value:   true,
+					},
+					&urfavecli.BoolFlag{
 						Name:  "dryRun",
 						Usage: "encrypts files without deleting originals",
 						Value: false,
@@ -162,6 +168,12 @@ func main() {
 						Name:  "skipHidden",
 						Usage: "skips hidden folders",
 						Value: false,
+					},
+					&urfavecli.BoolFlag{
+						Name:    "recursive",
+						Aliases: []string{"r"},
+						Usage:   "process directories recursively",
+						Value:   true,
 					},
 					&urfavecli.StringFlag{
 						Name:  "encSuffix",
