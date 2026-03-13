@@ -3,6 +3,7 @@ package fs
 import (
 	iofs "io/fs"
 	"path/filepath"
+	"strings"
 
 	"github.com/marmos91/ransomware/utils"
 )
@@ -13,16 +14,18 @@ func WalkFilesWithExtFilter(path string, extBlacklist []string, extWhitelist []s
 			return err
 		}
 
-		isHidden, err := IsHidden(currentPath)
-		if err != nil {
-			return err
-		}
-
-		if skipHidden && isHidden {
-			if currentInfo.IsDir() {
-				return filepath.SkipDir
+		if skipHidden {
+			isHidden, err := IsHidden(currentPath)
+			if err != nil {
+				return err
 			}
-			return nil
+
+			if isHidden {
+				if currentInfo.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
 		}
 
 		if currentInfo.IsDir() {
@@ -57,7 +60,7 @@ func shouldProcess(path string, whitelist []string, blacklist []string) bool {
 
 func hasNonEmptyEntry(list []string) bool {
 	for _, s := range list {
-		if s != "" {
+		if strings.TrimSpace(s) != "" {
 			return true
 		}
 	}
