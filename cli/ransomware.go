@@ -297,10 +297,10 @@ func decryptFile(path string, rsaPrivateKey *rsa.PrivateKey, encSuffix string) e
 		return err
 	}
 
-	byteReader := bytes.NewReader(cipherText)
-	encryptedAesKey := make([]byte, 256)
+	keySize := rsaPrivateKey.Size()
+	encryptedAesKey := make([]byte, keySize)
 
-	_, err = byteReader.ReadAt(encryptedAesKey, 0)
+	_, err = bytes.NewReader(cipherText).ReadAt(encryptedAesKey, 0)
 
 	if err != nil {
 		return err
