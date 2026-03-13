@@ -42,7 +42,7 @@ func main() {
 		Flags: []urfavecli.Flag{
 			&urfavecli.BoolFlag{
 				Name:  "verbose",
-				Usage: "Runs the tool in silent mode (no logs)",
+				Usage: "Runs the tool in verbose mode (more logs)",
 				Value: false,
 			},
 		},
