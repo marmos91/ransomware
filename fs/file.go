@@ -8,6 +8,10 @@ func WriteToFile(path string, content []byte) error {
 	return os.WriteFile(path, content, 0644)
 }
 
+func WriteToFileWithMode(path string, content []byte, mode os.FileMode) error {
+	return os.WriteFile(path, content, mode)
+}
+
 func WriteStringToFile(path string, content string) error {
 	return WriteToFile(path, []byte(content))
 }
