@@ -10,20 +10,20 @@ import (
 	urfavecli "github.com/urfave/cli/v2"
 )
 
-const PUBLIC_KEY_NAME = "pub.pem"
-const PRIVATE_KEY_NAME = "priv.pem"
+const (
+	PUBLIC_KEY_NAME  = "pub.pem"
+	PRIVATE_KEY_NAME = "priv.pem"
+)
 
 func CreateKeys(ctx *urfavecli.Context) error {
 	path := ctx.String("path")
 
 	rsaKeypair, err := crypto.NewRandomRsaKeypair(crypto.RSA_KEY_SIZE)
-
 	if err != nil {
 		return err
 	}
 
 	absolutePath, err := filepath.Abs(path)
-
 	if err != nil {
 		return err
 	}
@@ -33,7 +33,6 @@ func CreateKeys(ctx *urfavecli.Context) error {
 
 	privatePemContent := crypto.ExportRsaPrivateKeyAsPemStr(rsaKeypair.Private)
 	publicPemContent, err := crypto.ExportRsaPublicKeyAsPemStr(rsaKeypair.Public)
-
 	if err != nil {
 		return err
 	}
@@ -45,7 +44,7 @@ func CreateKeys(ctx *urfavecli.Context) error {
 
 	pubKeyPath := filepath.Join(absolutePath, PUBLIC_KEY_NAME)
 	if err := fs.WriteStringToFile(pubKeyPath, publicPemContent); err != nil {
-		os.Remove(privKeyPath)
+		_ = os.Remove(privKeyPath)
 		return err
 	}
 
