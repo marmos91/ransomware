@@ -8,41 +8,42 @@ import (
 )
 
 func WalkFilesWithExtFilter(path string, extBlacklist []string, extWhitelist []string, skipHidden bool, callback func(path string, info iofs.FileInfo) error) error {
-	return filepath.Walk(path, func(currentPath string, currentInfo iofs.FileInfo, currentErr error) error {
-		if currentErr != nil {
-			return currentErr
+	return filepath.Walk(path, func(currentPath string, currentInfo iofs.FileInfo, err error) error {
+		if err != nil {
+			return err
 		}
 
 		isHidden, err := IsHidden(currentPath)
-
 		if err != nil {
-			return currentErr
+			return err
 		}
 
 		if skipHidden && isHidden {
-			return currentErr
+			return nil
 		}
 
 		if currentInfo.IsDir() {
-			return currentErr
+			return nil
 		}
 
-		if len(extWhitelist) > 0 && whitelisted(currentPath, extWhitelist) {
-			currentErr = callback(currentPath, currentInfo)
-		} else if len(extBlacklist) > 0 && notBlacklisted(currentPath, extBlacklist) {
-			currentErr = callback(currentPath, currentInfo)
-		} else if len(extWhitelist) == 0 && len(extBlacklist) == 0 {
-			currentErr = callback(currentPath, currentInfo)
+		if !shouldProcess(currentPath, extWhitelist, extBlacklist) {
+			return nil
 		}
 
-		return currentErr
+		return callback(currentPath, currentInfo)
 	})
 }
 
-func whitelisted(path string, whitelist []string) bool {
-	return utils.SliceContains(whitelist, filepath.Ext(path))
-}
+func shouldProcess(path string, whitelist []string, blacklist []string) bool {
+	ext := filepath.Ext(path)
 
-func notBlacklisted(path string, blacklist []string) bool {
-	return !utils.SliceContains(blacklist, filepath.Ext(path))
+	if len(whitelist) > 0 {
+		return utils.SliceContains(whitelist, ext)
+	}
+
+	if len(blacklist) > 0 {
+		return !utils.SliceContains(blacklist, ext)
+	}
+
+	return true
 }
