@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -44,7 +45,9 @@ func CreateKeys(ctx *urfavecli.Context) error {
 
 	pubKeyPath := filepath.Join(absolutePath, PUBLIC_KEY_NAME)
 	if err := fs.WriteStringToFile(pubKeyPath, publicPemContent); err != nil {
-		_ = os.Remove(privKeyPath)
+		if removeErr := os.Remove(privKeyPath); removeErr != nil {
+			return fmt.Errorf("failed to write public key: %w (also failed to clean up private key: %v)", err, removeErr)
+		}
 		return err
 	}
 

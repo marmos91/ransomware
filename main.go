@@ -150,7 +150,7 @@ func main() {
 				Flags: []urfavecli.Flag{
 					&urfavecli.StringFlag{
 						Name:     "path",
-						Aliases:  []string{"c"},
+						Aliases:  []string{"p"},
 						Usage:    "Runs the tool on a directory",
 						Required: true,
 					},
