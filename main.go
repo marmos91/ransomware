@@ -153,6 +153,11 @@ func main() {
 						Usage:   "number of parallel workers (clamped to NumCPU); higher values increase memory usage with large files",
 						Value:   1,
 					},
+					&urfavecli.Int64Flag{
+						Name:  "partial",
+						Usage: "encrypt only the first N bytes of each file (0 = full encryption)",
+						Value: 0,
+					},
 				},
 				Action: cli.Encrypt,
 			},

