@@ -221,6 +221,52 @@ func main() {
 				},
 				Action: cli.Decrypt,
 			},
+			{
+				Name:    "verify",
+				Usage:   "Verifies encrypted files can be decrypted without writing output",
+				Aliases: []string{"v"},
+				Before:  beforeCommand,
+				Flags: []urfavecli.Flag{
+					&urfavecli.StringFlag{
+						Name:     "path",
+						Aliases:  []string{"p"},
+						Usage:    "Directory containing encrypted files",
+						Required: true,
+					},
+					&urfavecli.StringFlag{
+						Name:     "privateKey",
+						Usage:    "Loads the provided RSA private key in PEM format",
+						Required: true,
+					},
+					&urfavecli.BoolFlag{
+						Name:  "skipHidden",
+						Usage: "skips hidden folders",
+						Value: false,
+					},
+					&urfavecli.BoolFlag{
+						Name:    "recursive",
+						Aliases: []string{"r"},
+						Usage:   "process directories recursively",
+						Value:   true,
+					},
+					&urfavecli.StringFlag{
+						Name:  "encSuffix",
+						Usage: "defines the suffix of encrypted files",
+						Value: ".enc",
+					},
+					&urfavecli.IntFlag{
+						Name:    "workers",
+						Aliases: []string{"w"},
+						Usage:   "number of parallel workers (clamped to NumCPU)",
+						Value:   1,
+					},
+					&urfavecli.StringFlag{
+						Name:  "report",
+						Usage: "write a JSON summary report to the given file path",
+					},
+				},
+				Action: cli.Verify,
+			},
 		},
 	}
 
