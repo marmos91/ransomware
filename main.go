@@ -61,6 +61,11 @@ func main() {
 				Usage:   "Generates a new random keypair and saves it to a file",
 				Before:  beforeCommand,
 				Flags: []urfavecli.Flag{
+					&urfavecli.IntFlag{
+						Name:  "keySize",
+						Usage: "RSA key size in bits (2048, 3072, or 4096)",
+						Value: 2048,
+					},
 					&urfavecli.StringFlag{
 						Name:    "path",
 						Aliases: []string{"p"},
