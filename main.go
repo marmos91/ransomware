@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"fmt"
 	"os"
 	"time"
 
@@ -18,9 +18,12 @@ const (
 )
 
 func beforeCommand(ctx *urfavecli.Context) error {
-	if !ctx.Bool("verbose") {
-		utils.DisableLogs()
-	} else {
+	verbose := ctx.Bool("verbose")
+	jsonFormat := ctx.Bool("logFormat")
+
+	utils.SetupLogging(verbose, jsonFormat)
+
+	if verbose {
 		figure.NewFigure(APP_NAME, "graffiti", true).Print()
 	}
 	return nil
@@ -43,6 +46,12 @@ func main() {
 				Name:  "verbose",
 				Usage: "Runs the tool in verbose mode (more logs)",
 				Value: false,
+			},
+			&urfavecli.BoolFlag{
+				Name:    "logFormat",
+				Aliases: []string{"json"},
+				Usage:   "Enable JSON log output (default: text)",
+				Value:   false,
 			},
 		},
 		Commands: []*urfavecli.Command{
@@ -198,6 +207,7 @@ func main() {
 	}
 
 	if err := app.Run(os.Args); err != nil {
-		log.Fatal(err)
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
 	}
 }

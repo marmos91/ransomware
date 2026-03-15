@@ -2,7 +2,7 @@ package cli
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -29,8 +29,8 @@ func CreateKeys(ctx *urfavecli.Context) error {
 		return err
 	}
 
-	log.Println("Generated random keys at", absolutePath)
-	log.Printf("Hide your %s key!", PRIVATE_KEY_NAME)
+	slog.Info("Generated random keys", "path", absolutePath)
+	slog.Warn("Remember to hide your private key!", "file", PRIVATE_KEY_NAME)
 
 	privatePemContent := crypto.ExportRsaPrivateKeyAsPemStr(rsaKeypair.Private)
 	publicPemContent, err := crypto.ExportRsaPublicKeyAsPemStr(rsaKeypair.Public)
