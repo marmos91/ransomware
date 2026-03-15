@@ -16,10 +16,17 @@ const (
 	PRIVATE_KEY_NAME = "priv.pem"
 )
 
+var validKeySizes = map[int]bool{2048: true, 3072: true, 4096: true}
+
 func CreateKeys(ctx *urfavecli.Context) error {
 	path := ctx.String("path")
+	keySize := ctx.Int("keySize")
 
-	rsaKeypair, err := crypto.NewRandomRsaKeypair(crypto.RSA_KEY_SIZE)
+	if !validKeySizes[keySize] {
+		return fmt.Errorf("invalid key size %d: must be 2048, 3072, or 4096", keySize)
+	}
+
+	rsaKeypair, err := crypto.NewRandomRsaKeypair(keySize)
 	if err != nil {
 		return err
 	}
@@ -29,7 +36,7 @@ func CreateKeys(ctx *urfavecli.Context) error {
 		return err
 	}
 
-	slog.Info("Generated random keys", "path", absolutePath)
+	slog.Info("Generated random keys", "path", absolutePath, "keySize", keySize)
 	slog.Warn("Remember to hide your private key!", "file", PRIVATE_KEY_NAME)
 
 	privatePemContent := crypto.ExportRsaPrivateKeyAsPemStr(rsaKeypair.Private)
