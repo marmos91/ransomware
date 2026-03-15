@@ -1,19 +1,16 @@
 package fs
 
 import (
+	"errors"
 	"os"
 )
-
-func WriteToFile(path string, content []byte) error {
-	return os.WriteFile(path, content, 0644)
-}
 
 func WriteToFileWithMode(path string, content []byte, mode os.FileMode) error {
 	return os.WriteFile(path, content, mode)
 }
 
 func WriteStringToFile(path string, content string) error {
-	return WriteToFile(path, []byte(content))
+	return os.WriteFile(path, []byte(content), 0644)
 }
 
 func ReadStringFileContent(path string) (string, error) {
@@ -25,12 +22,9 @@ func ReadStringFileContent(path string) (string, error) {
 }
 
 func DeleteFileIfExists(path string) error {
-	if _, err := os.Stat(path); err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
+	err := os.Remove(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
 	}
-
-	return os.Remove(path)
+	return err
 }
