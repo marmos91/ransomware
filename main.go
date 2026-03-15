@@ -158,6 +158,10 @@ func main() {
 						Usage: "encrypt only the first N bytes of each file (0 = full encryption)",
 						Value: 0,
 					},
+					&urfavecli.StringFlag{
+						Name:  "report",
+						Usage: "write a JSON summary report to the given file path",
+					},
 				},
 				Action: cli.Encrypt,
 			},
@@ -209,6 +213,10 @@ func main() {
 						Aliases: []string{"w"},
 						Usage:   "number of parallel workers (clamped to NumCPU); higher values increase memory usage with large files",
 						Value:   1,
+					},
+					&urfavecli.StringFlag{
+						Name:  "report",
+						Usage: "write a JSON summary report to the given file path",
 					},
 				},
 				Action: cli.Decrypt,

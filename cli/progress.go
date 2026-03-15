@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,9 +14,23 @@ type Progress struct {
 	total      int
 	counter    int64
 	totalBytes int64
+	errors     int64
 	startTime  time.Time
 	operation  string
 	mu         sync.Mutex
+}
+
+// Report holds the summary data for JSON/text report output.
+type Report struct {
+	Operation  string `json:"operation"`
+	Files      int64  `json:"files"`
+	TotalFiles int    `json:"totalFiles"`
+	Bytes      int64  `json:"bytes"`
+	BytesHuman string `json:"bytesHuman"`
+	Duration   string `json:"duration"`
+	DurationMs int64  `json:"durationMs"`
+	Errors     int64  `json:"errors"`
+	Status     string `json:"status"`
 }
 
 func NewProgress(operation string, total int) *Progress {
@@ -35,6 +50,10 @@ func (p *Progress) Tick(path string, size int64) {
 	p.mu.Unlock()
 }
 
+func (p *Progress) AddError() {
+	atomic.AddInt64(&p.errors, 1)
+}
+
 func (p *Progress) Summary(failed bool) {
 	elapsed := time.Since(p.startTime).Round(time.Millisecond)
 	count := atomic.LoadInt64(&p.counter)
@@ -47,6 +66,41 @@ func (p *Progress) Summary(failed bool) {
 
 	fmt.Fprintf(os.Stderr, "\n%s %s: %d files (%s) in %s\n",
 		p.operation, status, count, formatBytes(totalBytes), elapsed)
+}
+
+// GenerateReport returns a Report struct with the operation summary.
+// The failed flag reflects the overall command outcome (not just tracked errors).
+func (p *Progress) GenerateReport(failed bool) Report {
+	elapsed := time.Since(p.startTime).Round(time.Millisecond)
+	count := atomic.LoadInt64(&p.counter)
+	totalBytes := atomic.LoadInt64(&p.totalBytes)
+	errCount := atomic.LoadInt64(&p.errors)
+
+	status := "success"
+	if failed || errCount > 0 {
+		status = "completed with errors"
+	}
+
+	return Report{
+		Operation:  p.operation,
+		Files:      count,
+		TotalFiles: p.total,
+		Bytes:      totalBytes,
+		BytesHuman: formatBytes(totalBytes),
+		Duration:   elapsed.String(),
+		DurationMs: elapsed.Milliseconds(),
+		Errors:     errCount,
+		Status:     status,
+	}
+}
+
+// WriteReport writes the report to the given path as JSON.
+func WriteReport(path string, report Report) error {
+	data, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal report: %w", err)
+	}
+	return os.WriteFile(path, data, 0644)
 }
 
 func formatBytes(b int64) string {
