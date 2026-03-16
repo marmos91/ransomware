@@ -1,5 +1,11 @@
 # ransomware
 
+[![CI](https://github.com/marmos91/ransomware/actions/workflows/ci.yml/badge.svg)](https://github.com/marmos91/ransomware/actions/workflows/ci.yml)
+[![Release](https://github.com/marmos91/ransomware/actions/workflows/release.yml/badge.svg)](https://github.com/marmos91/ransomware/actions/workflows/release.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/marmos91/ransomware)](https://goreportcard.com/report/github.com/marmos91/ransomware)
+[![GitHub release](https://img.shields.io/github/v/release/marmos91/ransomware)](https://github.com/marmos91/ransomware/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A demonstration tool to simulate a ransomware attack locally.
 
 ## Disclaimer
