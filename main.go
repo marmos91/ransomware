@@ -19,7 +19,7 @@ const (
 
 func beforeCommand(ctx *urfavecli.Context) error {
 	verbose := ctx.Bool("verbose")
-	jsonFormat := ctx.Bool("logFormat")
+	jsonFormat := ctx.Bool("jsonLogs")
 
 	utils.SetupLogging(verbose, jsonFormat)
 
@@ -48,7 +48,7 @@ func main() {
 				Value: false,
 			},
 			&urfavecli.BoolFlag{
-				Name:    "logFormat",
+				Name:    "jsonLogs",
 				Aliases: []string{"json"},
 				Usage:   "Enable JSON log output (default: text)",
 				Value:   false,
