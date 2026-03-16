@@ -1,0 +1,36 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+    - gosec
+
+  settings:
+    gosec:
+      excludes:
+        - G115 # integer overflow conversion — safe in context (known RSA key sizes, chunk sizes)
+        - G301 # directory permissions 0755 — standard for directories
+        - G302 # file permissions 0644 — standard for non-secret files
+        - G304 # file inclusion via variable — core to file-processing tool
+        - G306 # WriteFile permissions 0644 — standard for non-secret files
+
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+          - dupl
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
