@@ -12,9 +12,14 @@ import (
 )
 
 const (
-	APP_NAME        = "ransomware"
-	APP_DESCRIPTION = "A simple demonstration tool to simulate a ransomware attack"
-	APP_VERSION     = "v1.0.0"
+	appName        = "ransomware"
+	appDescription = "A simple demonstration tool to simulate a ransomware attack"
+)
+
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
 )
 
 func beforeCommand(ctx *urfavecli.Context) error {
@@ -24,16 +29,16 @@ func beforeCommand(ctx *urfavecli.Context) error {
 	utils.SetupLogging(verbose, jsonFormat)
 
 	if verbose {
-		figure.NewFigure(APP_NAME, "graffiti", true).Print()
+		figure.NewFigure(appName, "graffiti", true).Print()
 	}
 	return nil
 }
 
 func main() {
 	app := &urfavecli.App{
-		Name:     APP_NAME,
-		Usage:    APP_DESCRIPTION,
-		Version:  APP_VERSION,
+		Name:     appName,
+		Usage:    appDescription,
+		Version:  fmt.Sprintf("%s (commit: %s, built: %s)", version, commit, date),
 		Compiled: time.Now(),
 		Authors: []*urfavecli.Author{
 			{
@@ -45,13 +50,11 @@ func main() {
 			&urfavecli.BoolFlag{
 				Name:  "verbose",
 				Usage: "Runs the tool in verbose mode (more logs)",
-				Value: false,
 			},
 			&urfavecli.BoolFlag{
 				Name:    "jsonLogs",
 				Aliases: []string{"json"},
 				Usage:   "Enable JSON log output (default: text)",
-				Value:   false,
 			},
 		},
 		Commands: []*urfavecli.Command{
@@ -100,12 +103,10 @@ func main() {
 					&urfavecli.StringFlag{
 						Name:  "extWhitelist",
 						Usage: "the extension to whitelist",
-						Value: "",
 					},
 					&urfavecli.BoolFlag{
 						Name:  "skipHidden",
 						Usage: "skips hidden folders",
-						Value: false,
 					},
 					&urfavecli.BoolFlag{
 						Name:    "recursive",
@@ -116,7 +117,6 @@ func main() {
 					&urfavecli.BoolFlag{
 						Name:  "dryRun",
 						Usage: "encrypts files without deleting originals",
-						Value: false,
 					},
 					&urfavecli.StringFlag{
 						Name:  "encSuffix",
@@ -126,7 +126,6 @@ func main() {
 					&urfavecli.BoolFlag{
 						Name:  "addRansom",
 						Usage: "if set to true add a ransom note to every encrypted folder",
-						Value: false,
 					},
 					&urfavecli.StringFlag{
 						Name:  "ransomTemplatePath",
@@ -140,7 +139,6 @@ func main() {
 					&urfavecli.Float64Flag{
 						Name:  "bitcoinCount",
 						Usage: "how many bitcoins to ask as ransom",
-						Value: 0,
 					},
 					&urfavecli.StringFlag{
 						Name:  "bitcoinAddress",
@@ -156,7 +154,6 @@ func main() {
 					&urfavecli.Int64Flag{
 						Name:  "partial",
 						Usage: "encrypt only the first N bytes of each file (0 = full encryption)",
-						Value: 0,
 					},
 					&urfavecli.StringFlag{
 						Name:  "report",
@@ -185,12 +182,10 @@ func main() {
 					&urfavecli.BoolFlag{
 						Name:  "dryRun",
 						Usage: "decrypts files without deleting encrypted versions",
-						Value: false,
 					},
 					&urfavecli.BoolFlag{
 						Name:  "skipHidden",
 						Usage: "skips hidden folders",
-						Value: false,
 					},
 					&urfavecli.BoolFlag{
 						Name:    "recursive",
@@ -241,7 +236,6 @@ func main() {
 					&urfavecli.BoolFlag{
 						Name:  "skipHidden",
 						Usage: "skips hidden folders",
-						Value: false,
 					},
 					&urfavecli.BoolFlag{
 						Name:    "recursive",

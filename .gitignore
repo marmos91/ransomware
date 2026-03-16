@@ -128,6 +128,9 @@ $RECYCLE.BIN/
 *.lnk
 
 # Keys
-*.pem 
+*.pem
+
+# GoReleaser
+dist/
 
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,macos,linux,windows,go
