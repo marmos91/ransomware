@@ -1,167 +1,192 @@
-# ransomware-example
+# ransomware
 
-A simple demonstration tool to simulate a ransomware attack locally
+A demonstration tool to simulate a ransomware attack locally.
 
-## ⚠️ Disclaimer ⚠️
+## Disclaimer
 
-This software is made just for demonstration and study purposes.
-If you want to run it locally for tests, take care of what directories you decide to encrypt. The software is distributed in MIT license.
-Its use is free, however the author doesn't take responsibility for any illegal use of the code by 3rd parties.
+> **This software is provided for testing, study, and demonstration purposes only.**
+>
+> Unauthorized access to computer systems and encryption of files without permission is **illegal** in most jurisdictions and may result in criminal prosecution. This tool should **only** be used in controlled environments on systems you own or have explicit permission to test.
+>
+> The authors assume **no responsibility** for any misuse of this tool. Users are **solely responsible** for ensuring their use complies with all applicable laws. Any malicious use is strictly prohibited.
+>
+> This software is distributed under the [MIT License](LICENSE).
 
-## Setup
+## Installation
 
-To setup the tool just run
+### Go install
 
 ```bash
 go install github.com/marmos91/ransomware@latest
 ```
 
-### Setup locally
+### Pre-built binaries
 
-To run the tool locally without installing it
+Download pre-built binaries from the [GitHub Releases](https://github.com/marmos91/ransomware/releases) page.
+
+### Build from source
 
 ```bash
-go run main.go
+git clone https://github.com/marmos91/ransomware.git
+cd ransomware
+go build -o ransomware .
 ```
 
-## Why
+## How It Works
 
-In order to demonstrate the way ransomware works quickly and in a protected environment, **it is very useful to be able to restrict its operation within a directory**.
-This way the process takes much less time (the entire operating system does not need to be encrypted).
-Writing this tool in Go, also **allows the tool to be developed even in a non-Windows environment** (by far the most supported operating system by ransomware available online)
+The tool implements a [**hybrid encryption strategy**](https://www.picussecurity.com/resource/the-most-common-ransomware-ttp-mitre-attck-t1486-data-encrypted-for-impact#:~:text=In%20the%20hybrid%20encryption%20approach,(public%20key)%20encryption%20algorithm.) combining two algorithms:
 
-## Demo
+- [AES-256](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard) for fast symmetric file encryption
+- [RSA-2048](https://en.wikipedia.org/wiki/RSA_(cryptosystem)) for asymmetric key protection
 
-This project was used to showcase the resilience of [Cubbit](https://www.cubbit.io)'s object storage to this type of attack, demonstrating how it is possible to defend against such a tool using.
-Cubbit's features ([versioning](https://docs.cubbit.io/guides/bucket-and-object-versioning), [object locking](https://docs.cubbit.io/guides/object-lock)).
+This hybrid approach leverages AES performance for bulk encryption while keeping the decryption key out of the executable.
 
-The whole thing is available in a video demo that can be found [here](https://www.youtube.com/watch?v=w4vfng17eYg).
+A new random AES key is generated per session and used to encrypt all files in the target directory. The AES key is then **encrypted with the public RSA key** and prepended to each encrypted file.
 
-[![Watch the video](https://markdown-videos.vercel.app/youtube/w4vfng17eYg)](https://youtu.be/w4vfng17eYg)
+During decryption, the tool reads the encrypted AES key from each file header, decrypts it with the private RSA key, and uses it to restore the file contents.
 
-The restore tool used in the demo is available [here](https://github.com/marmos91/s3restore).
+## Features
 
-## How to use it
+- **Parallel processing** — `--workers` flag for concurrent file operations (clamped to available CPUs)
+- **Partial encryption** — encrypt only the first N bytes per file for faster operations on large files
+- **JSON reports** — `--report` flag to write a JSON summary for automation
+- **Verification** — confirm encrypted files are valid without writing output
+- **Progress output** — live `[N/TOTAL]` progress indicator on stderr
+- **Metadata preservation** — file permissions and modification times are retained
+- **Dry run mode** — test encryption/decryption without deleting originals
+- **Ransom notes** — customizable templates using Go template variables
+- **Cross-platform** — Linux, macOS, Windows (amd64/arm64)
 
-This tool is used to simulate a ransomware attack. With it you can perform the following actions:
+## Usage
 
-1. After setting up a key, recursively encrypt the contents of a specified path
-2. After asking for a key, recursively decrypt the contents of a specified path
+### Global Flags
 
-## Help
+| Flag | Description |
+|------|-------------|
+| `--verbose` | Enable verbose logging |
+| `--jsonLogs`, `--json` | Enable JSON log output |
+| `--version` | Print version information |
+
+---
+
+### `create-keys` (alias: `c`)
+
+Generate an RSA keypair (`pub.pem` and `priv.pem`).
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--keySize` | `2048` | RSA key size in bits (`2048`, `3072`, or `4096`) |
+| `--path`, `-p` | `.` | Directory where keys are saved |
+
+**Example:**
 
 ```bash
-NAME:
-   ransomware - A simple demonstration tool to simulate a ransomware attack
-
-USAGE:
-   ransomware [global options] command [command options] [arguments...]
-
-VERSION:
-   v1.0.0
-
-AUTHOR:
-   Marco Moschettini <marco.moschettini@cubbit.io>
-
-COMMANDS:
-   create-keys, c  Generates a new random keypair and saves it to a file
-   encrypt, e      Encrypts a directory
-   decrypt, d      Decrypts a directory
-   help, h         Shows a list of commands or help for one command
-
-GLOBAL OPTIONS:
-   --verbose      Runs the tool in verbose mode (more logs) (default: false)
-   --help, -h     show help (default: false)
-   --version, -v  print the version (default: false)
+ransomware create-keys --keySize 4096 --path ~/keys
 ```
 
-## Create a keypair
+> In a real scenario the **private key** would be stored on a remote server and only provided after the ransom is paid. The **public key** is embedded in the ransomware to encrypt the target files.
 
-First thing you need to do is to create a keypair. You can do it by running
+---
 
-```bash
-ransomware create-keys --path ~/Desktop
-```
+### `encrypt` (alias: `e`)
 
-If you don't specifiy a path it will create the keys in `pwd`.
-This command will create two files:
+Encrypt all files in a directory.
 
-- pub.pem
-- priv.pem
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--path`, `-p` | *required* | Target directory to encrypt |
+| `--publicKey` | *required* | Path to the RSA public key (PEM format) |
+| `--workers`, `-w` | `1` | Number of parallel workers (clamped to NumCPU) |
+| `--partial` | `0` | Encrypt only the first N bytes (`0` = full file) |
+| `--report` | | Write a JSON summary report to the given file path |
+| `--recursive`, `-r` | `true` | Process directories recursively |
+| `--extBlacklist` | `.enc` | Comma-separated list of extensions to skip |
+| `--extWhitelist` | | Comma-separated list of extensions to include |
+| `--skipHidden` | `false` | Skip hidden files and folders |
+| `--dryRun` | `false` | Encrypt without deleting originals |
+| `--encSuffix` | `.enc` | Suffix appended to encrypted files |
+| `--addRansom` | `false` | Add a ransom note to every encrypted folder |
+| `--ransomTemplatePath` | | Path to the ransom note template |
+| `--ransomFileName` | `IMPORTANT.txt` | Name of the ransom note file |
+| `--bitcoinCount` | `0` | Amount of bitcoin to request |
+| `--bitcoinAddress` | `<bitcoin address>` | Bitcoin address for payment |
 
-In a real scenario you need to put the `private key` in a server and provide it only after the victim payed the ransom. The public key needs instead to be embedded in the ransomware to encrypt the folders
-
-## Encrypt a directory
-
-With this command you can recursively encrypt every file inside a specified directory.
-
-```bash
-NAME:
-   ransomware encrypt - Encrypts a directory
-
-USAGE:
-   ransomware encrypt [command options] [arguments...]
-
-OPTIONS:
-   --path value, -p value      Runs the tool on a directory
-   --publicKey value           Loads the provided RSA public key in PEM format
-   --extBlacklist value        the extension to blacklist (default: ".enc")
-   --extWhitelist value        the extension to whitelist
-   --skipHidden                skips hidden folders (default: false)
-   --dryRun                    encrypts files without deleting originals (default: false)
-   --encSuffix value           defines the suffix to add to encrypted files (default: ".enc")
-   --addRansom                 if set to true add a ransom note to every encrypted folder (default: false)
-   --ransomTemplatePath value  defines where to find the template to use for the ransom note
-   --ransomFileName value      defines the name of the ransom file name (default: "IMPORTANT.txt")
-   --bitcoinCount value        how many bitcoins to ask as ransom (default: 0)
-   --bitcoinAddress value      the bitcoin address to use (default: "<bitcoin address>")
-   --help, -h                  show help (default: false)
-```
-
-For example if you want to run the tool on the `~/Documents` folder run:
+**Examples:**
 
 ```bash
+# Basic encryption
 ransomware encrypt --publicKey ./pub.pem --path ~/Documents
-```
 
-This command provides the following options:
-
-- `path`: the path to encrypt. This is required
-- `publicKey`: the path of the publicKey PEM file created by the `create-keys` command
-- `extBlacklist`: if provided, a comma-separated list of extension to skip. **This feature is useful, to exclude executable like `.exe` files**
-- `extWhitelist`: if provided, a comma-separated list of extension to whitelist
-- `skipHidden`: if set, skips hidden folders
-- `dryRun`: just creates encrypted files without deleting originals
-- `encSuffix`: defines a custom extension to set on encrypted files (default `.enc`)
-- `addRansom`: if the tool should generate a new ransom.txt file for each encrypted folder
-- `ransomTemplatePath`: the path of the template to use as ransom
-- `ransomFileName`: the name to give to the ransom file
-- `bitcoinCount`: how many bitcoin to ask as ransom
-- `bitcoinAddress`: the bitcoin address to use inside the ransom file
-
-### Examples
-
-Just encrypt gif files on Desktop
-
-```bash
+# Only .gif files
 ransomware encrypt --publicKey ./pub.pem --path ~/Desktop --extWhitelist .gif
-```
 
-Encrypt everything except `.csv` and `.pdf` files
+# 4 workers with partial encryption (first 1024 bytes only)
+ransomware encrypt --publicKey ./pub.pem --path ~/Desktop --workers 4 --partial 1024
 
-```bash
-ransomware encrypt --publicKey ./pub.pem --path ~/Desktop --extBlacklist .csv,.pdf
-```
+# Generate a JSON report
+ransomware encrypt --publicKey ./pub.pem --path ~/Desktop --report report.json
 
-Encrypt everything and add a ransom file
-
-```bash
+# Include a ransom note
 ransomware encrypt --publicKey ./pub.pem --path ~/Desktop --addRansom --ransomTemplatePath ./ransom/IMPORTANT.txt
 ```
 
-### Ransom file
+---
 
-This is an example of ransom file. The templated strings `{{.BitcoinAddress}}`, `{{.BitcoinCount}}` and `{{.PubliKey}}` will be replace by the script. Please check encrypt options to see options available
+### `decrypt` (alias: `d`)
+
+Decrypt an encrypted directory back to its original form.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--path`, `-p` | *required* | Target directory to decrypt |
+| `--privateKey` | *required* | Path to the RSA private key (PEM format) |
+| `--workers`, `-w` | `1` | Number of parallel workers (clamped to NumCPU) |
+| `--report` | | Write a JSON summary report to the given file path |
+| `--recursive`, `-r` | `true` | Process directories recursively |
+| `--skipHidden` | `false` | Skip hidden files and folders |
+| `--dryRun` | `false` | Decrypt without deleting encrypted versions |
+| `--encSuffix` | `.enc` | Suffix of encrypted files |
+| `--ransomFileName` | `IMPORTANT.txt` | Name of the ransom note file (to clean up) |
+
+**Examples:**
+
+```bash
+# Basic decryption
+ransomware decrypt --privateKey ./priv.pem --path ~/Documents
+
+# 4 workers with a JSON report
+ransomware decrypt --privateKey ./priv.pem --path ~/Documents --workers 4 --report report.json
+```
+
+---
+
+### `verify` (alias: `v`)
+
+Verify that encrypted files can be decrypted without writing output. Useful for checking file integrity before a full decryption.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--path`, `-p` | *required* | Directory containing encrypted files |
+| `--privateKey` | *required* | Path to the RSA private key (PEM format) |
+| `--workers`, `-w` | `1` | Number of parallel workers (clamped to NumCPU) |
+| `--report` | | Write a JSON summary report to the given file path |
+| `--recursive`, `-r` | `true` | Process directories recursively |
+| `--skipHidden` | `false` | Skip hidden files and folders |
+| `--encSuffix` | `.enc` | Suffix of encrypted files |
+
+**Examples:**
+
+```bash
+# Basic verification
+ransomware verify --privateKey ./priv.pem --path ~/Documents
+
+# Verify with a JSON report
+ransomware verify --privateKey ./priv.pem --path ~/Documents --report verify-report.json
+```
+
+## Ransom Note Template
+
+The ransom note uses Go template variables. Three placeholders are available: `{{.BitcoinAddress}}`, `{{.BitcoinCount}}`, and `{{.PublicKey}}`.
 
 ```txt
 !!! IMPORTANT !!!
@@ -179,49 +204,14 @@ The public key to use in the form is
 {{.PublicKey}}
 ```
 
-## Decrypt a directory
+## Demo
 
-With this command you can decrypt a folder back to its original form after a victim payed the ransom
+This project was used to showcase the resilience of [Cubbit](https://www.cubbit.io)'s object storage against ransomware, demonstrating defenses via [versioning](https://docs.cubbit.io/guides/bucket-and-object-versioning) and [object locking](https://docs.cubbit.io/guides/object-lock).
 
-```bash
-NAME:
-   ransomware decrypt - Decrypts a directory
+[![Watch the video](https://markdown-videos.vercel.app/youtube/w4vfng17eYg)](https://youtu.be/w4vfng17eYg)
 
-USAGE:
-   ransomware decrypt [command options] [arguments...]
+The restore tool used in the demo is available [here](https://github.com/marmos91/s3restore).
 
-OPTIONS:
-   --path value, -c value  Runs the tool on a directory
-   --privateKey value      Loads the provided RSA private key in PEM format
-   --dryRun                decrypts files without deleting encrypted versions (default: false)
-   --encSuffix value       defines the suffix to add to encrypted files (default: ".enc")
-   --ransomFileName value  defines the name of the ransom file name (default: "IMPORTANT.txt")
-   --help, -h              show help (default: false)
-```
+## License
 
-For example if you want to run the tool on the `~/Documents` folder run:
-
-```bash
-ransomware decrypt --privateKey ./priv.pem --path ~/Desktop/toEncrypt
-```
-
-This command provides the following options:
-
-- `path`: the path to encrypt. This is required
-- `privateKey`: the path of the privateKey PEM file created by the `create-keys` command
-- `dryRun`: just creates decrypted files without deleting encrypted version
-- `encSuffix`: defines a custom extension for encrypted files (default `.enc`)
-- `ransomFileName`: defines the name of the ransom file. Needed to delete the files previously generated
-
-## How it works
-
-The tool implements a [**hybrid encryption strategy**](<https://www.picussecurity.com/resource/the-most-common-ransomware-ttp-mitre-attck-t1486-data-encrypted-for-impact#:~:text=In%20the%20hybrid%20encryption%20approach,(public%20key)%20encryption%20algorithm.>) making use of two different algorithms:
-
-- [AES256](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard)
-- [RSA2048](<https://en.wikipedia.org/wiki/RSA_(cryptosystem)>)
-
-The reason for this choice is related to the different nature of the two encryption algorithms. **A hybrid approach takes advantage of the performance of AES to execute faster, while at the same time not providing the decryption key within the executable**.
-
-A new random AES key is then generated for the session each time the tool is executed. **This key is used to encrypt all files in the selected folder**. For later retrieval, this key is **encrypted with the public RSA key provided** to the tool and prepended to all encrypted files.
-
-In this way, the tool, provided with the corresponding private key, will be able to **read the AES key at the beginning of each file, decrypt it, and finally use it to decrypt the file**.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
