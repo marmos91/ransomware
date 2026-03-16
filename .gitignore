@@ -133,4 +133,7 @@ $RECYCLE.BIN/
 # GoReleaser
 dist/
 
+# Nix
+result
+
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,macos,linux,windows,go
