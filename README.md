@@ -30,6 +30,26 @@ go install github.com/marmos91/ransomware@latest
 
 Download pre-built binaries from the [GitHub Releases](https://github.com/marmos91/ransomware/releases) page.
 
+### Nix
+
+Run directly without installing:
+
+```bash
+nix run github:marmos91/ransomware
+```
+
+Or install into your profile:
+
+```bash
+nix profile install github:marmos91/ransomware
+```
+
+A development shell with Go, gopls, golangci-lint, and goreleaser is also available:
+
+```bash
+nix develop github:marmos91/ransomware
+```
+
 ### Build from source
 
 ```bash
