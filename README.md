@@ -56,6 +56,15 @@ nix develop github:marmos91/ransomware
 git clone https://github.com/marmos91/ransomware.git
 cd ransomware
 go build -o ransomware .
+./ransomware --help
+```
+
+> The `./` prefix is necessary. A shell searches only the directories in `$PATH` for a command, and the current directory is not in `$PATH`. A bare `ransomware` therefore fails with `command not found`.
+
+If the `go install` method does not find the command, add the Go binary directory to your `$PATH`. On Kali Linux, which uses `zsh`, add this line to `~/.zshrc`:
+
+```bash
+export PATH="$PATH:$HOME/go/bin"
 ```
 
 ## How It Works
@@ -88,7 +97,7 @@ During decryption, the tool reads the encrypted AES key from each file header, d
 ### Global Flags
 
 | Flag | Description |
-|------|-------------|
+| ------ | ------------- |
 | `--verbose` | Enable verbose logging |
 | `--jsonLogs`, `--json` | Enable JSON log output |
 | `--version` | Print version information |
@@ -119,7 +128,7 @@ ransomware create-keys --keySize 4096 --path ~/keys
 Encrypt all files in a directory.
 
 | Flag | Default | Description |
-|------|---------|-------------|
+| ------ | --------- | ------------- |
 | `--path`, `-p` | *required* | Target directory to encrypt |
 | `--publicKey` | *required* | Path to the RSA public key (PEM format) |
 | `--workers`, `-w` | `1` | Number of parallel workers (clamped to NumCPU) |
@@ -163,7 +172,7 @@ ransomware encrypt --publicKey ./pub.pem --path ~/Desktop --addRansom --ransomTe
 Decrypt an encrypted directory back to its original form.
 
 | Flag | Default | Description |
-|------|---------|-------------|
+| ------ | --------- | ------------- |
 | `--path`, `-p` | *required* | Target directory to decrypt |
 | `--privateKey` | *required* | Path to the RSA private key (PEM format) |
 | `--workers`, `-w` | `1` | Number of parallel workers (clamped to NumCPU) |
@@ -191,7 +200,7 @@ ransomware decrypt --privateKey ./priv.pem --path ~/Documents --workers 4 --repo
 Verify that encrypted files can be decrypted without writing output. Useful for checking file integrity before a full decryption.
 
 | Flag | Default | Description |
-|------|---------|-------------|
+| ------ | --------- | ------------- |
 | `--path`, `-p` | *required* | Directory containing encrypted files |
 | `--privateKey` | *required* | Path to the RSA private key (PEM format) |
 | `--workers`, `-w` | `1` | Number of parallel workers (clamped to NumCPU) |
